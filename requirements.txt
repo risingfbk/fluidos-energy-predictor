@@ -1,6 +1,7 @@
-matplotlib
-pandas
-seaborn
-scikit-learn
-tensorflow
-tqdm
+keras==2.12.0
+matplotlib==3.7.1
+numpy~=1.23.2
+scikit_learn==1.2.2
+tensorflow~=2.12.0
+#tensorflow_macos~=2.12.0
+tqdm==4.65.0
