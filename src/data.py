@@ -115,7 +115,7 @@ def obtain_vectors(data_file: str | list[str], mode: str) -> (np.ndarray, np.nda
     dataset = trans_back(scaler, float_inputs)
 
     # split into samples
-    xx, y = split_sequence(dataset, pm.STEPS_IN, pm.STEPS_OUT, pm.YWINDOW, pm.TEST_FILENAME)
+    xx, y = split_sequence(dataset, pm.STEPS_IN, pm.STEPS_OUT, pm.YWINDOW, pm.TEST_DATA)
     xx = xx.reshape((xx.shape[0], xx.shape[1], pm.N_FEATURES))
     log.debug("Working with", xx.shape, " ", y.shape, "samples")
 

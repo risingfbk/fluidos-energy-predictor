@@ -9,6 +9,8 @@ from keras.layers import LSTM
 
 import src.parameters as pm
 from src.data import obtain_vectors
+from src.log import initialize_log
+import matplotlib.pyplot as plt
 
 
 def obtain_model() -> tf.keras.Sequential:
@@ -23,7 +25,7 @@ def obtain_model() -> tf.keras.Sequential:
 
 
 def predict(model):
-    xx2, y2, scaler = obtain_vectors(pm.TEST_FILENAME, "test")
+    xx2, y2, scaler = obtain_vectors(pm.TEST_DATA, "test")
 
     __min = min(len(y2), pm.TEST_SIZE)
     xx2 = xx2[:__min + 1]
@@ -31,7 +33,7 @@ def predict(model):
 
     yhat_history = []
 
-    print("Predicting...")
+    log.info("Predicting...")
     for i in tqdm.tqdm(range(__min)):
         x_input = np.array(xx2[i])
         x_input = x_input.reshape((1, pm.STEPS_IN, pm.N_FEATURES))
@@ -39,20 +41,26 @@ def predict(model):
         yhat_history.append(yhat)
 
     yhat_history = np.array(yhat_history)
-    import matplotlib.pyplot as plt
 
+    # Dump the prediction to a file
+    os.makedirs(pm.LOG_FOLDER + "/pred", exist_ok=True)
+    np.savetxt(pm.LOG_FOLDER + "/pred/prediction.csv", yhat_history[:, 0, 0], delimiter=",")
+    np.savetxt(pm.LOG_FOLDER + "/pred/lower.csv", yhat_history[:, 0, 1], delimiter=",")
+    np.savetxt(pm.LOG_FOLDER + "/pred/upper.csv", yhat_history[:, 0, 2], delimiter=",")
+    np.savetxt(pm.LOG_FOLDER + "/pred/actual.csv", y2[:, 1], delimiter=",")
+
+    plt.tight_layout()
     plt.plot(yhat_history[:, 0, 0], label='target')
     plt.plot(yhat_history[:, 0, 1], label='lower')
     plt.plot(yhat_history[:, 0, 2], label='upper')
     plt.plot(y2[:, 1], label='actual')
     plt.legend()
-    plt.show()
+    plt.savefig(pm.LOG_FOLDER + "/prediction.png")
 
 
 def print_history(history):
-    import matplotlib.pyplot as plt
     # list all data in history
-    print(history.history.keys())
+    log.info("Available keys: " + str(history.history.keys()))
     try:
         # summarize history for accuracy
         plt.plot(history.history['accuracy'])
@@ -61,7 +69,7 @@ def print_history(history):
         plt.ylabel('accuracy')
         plt.xlabel('epoch')
         plt.legend(['train', 'test'], loc='upper left')
-        plt.show()
+        plt.savefig(pm.LOG_FOLDER + "/accuracy.png")
     except KeyError:
         pass
     # summarize history for loss
@@ -71,11 +79,15 @@ def print_history(history):
     plt.ylabel('loss')
     plt.xlabel('epoch')
     plt.legend(['train', 'test'], loc='upper left')
-    plt.show()
+    plt.savefig(pm.LOG_FOLDER + "/loss.png")
 
 
 def main():
-    log.basicConfig(level=log.INFO, stream=sys.stdout)
+    os.makedirs(pm.LOG_FOLDER, exist_ok=True)
+    os.makedirs(pm.MODEL_DIR, exist_ok=True)
+    os.makedirs(pm.DATA_DIR, exist_ok=True)
+
+    initialize_log("INFO")
     new_model = False
     while True:
         name = input(f"Model name: [{pm.DEFAULT_MODEL}] ")
@@ -108,6 +120,9 @@ def main():
                 print("Invalid input")
                 continue
             break
+
+    log.info(f"Model name: {name}; Retrain: {retrain}; New model: {new_model}")
+
 
     # Load model eventually
     if not new_model:
