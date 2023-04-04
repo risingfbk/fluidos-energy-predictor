@@ -1,12 +1,12 @@
+import logging as log
 import os
 
 import numpy as np
 import tqdm as tqdm
 from sklearn.preprocessing import MinMaxScaler
 
-import src.parameters as pm
 from src import parameters as pm
-import logging as log
+
 
 def load_data(file: str, mode: str) -> tuple[None, np.ndarray]:
     threshold = pm.TRAIN_SIZE if mode == "train" else pm.TEST_SIZE
@@ -67,7 +67,7 @@ def trans_back(scaler: MinMaxScaler, arr):
 def split_sequence(sequence, n_steps_in, n_steps_out, ywindow, filename):
     xx, y = [], []
     seq_filename = pm.DATA_DIR + '/' + \
-        'samples_' + ",".join([str(a) for a in [n_steps_in, n_steps_out, ywindow, filename, len(sequence)]])
+                   'samples_' + ",".join([str(a) for a in [n_steps_in, n_steps_out, ywindow, filename, len(sequence)]])
 
     if os.path.exists(seq_filename + '.npy'):
         log.info(f"Using cached data for {filename}...")

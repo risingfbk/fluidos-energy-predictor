@@ -1,3 +1,4 @@
+import logging as log
 import os
 import sys
 
@@ -8,7 +9,7 @@ from keras.layers import LSTM
 
 import src.parameters as pm
 from src.data import obtain_vectors
-import logging as log
+
 
 def obtain_model() -> tf.keras.Sequential:
     model = tf.keras.Sequential()
@@ -71,6 +72,7 @@ def print_history(history):
     plt.xlabel('epoch')
     plt.legend(['train', 'test'], loc='upper left')
     plt.show()
+
 
 def main():
     log.basicConfig(level=log.INFO, stream=sys.stdout)
