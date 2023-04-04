@@ -1,4 +1,5 @@
 import os
+import sys
 
 import numpy as np
 import tensorflow as tf
@@ -7,7 +8,7 @@ from keras.layers import LSTM
 
 import src.parameters as pm
 from src.data import obtain_vectors
-
+import logging as log
 
 def obtain_model() -> tf.keras.Sequential:
     model = tf.keras.Sequential()
@@ -16,7 +17,7 @@ def obtain_model() -> tf.keras.Sequential:
     )
     model.add(LSTM(pm.UNITS))
     model.add(tf.keras.layers.Dense(pm.STEPS_OUT))
-    model.compile(optimizer='adam', loss='mse')
+    model.compile(optimizer='RMSprop', loss='mse', metrics=['accuracy', 'mse'])
     return model
 
 
@@ -47,7 +48,32 @@ def predict(model):
     plt.show()
 
 
+def print_history(history):
+    import matplotlib.pyplot as plt
+    # list all data in history
+    print(history.history.keys())
+    try:
+        # summarize history for accuracy
+        plt.plot(history.history['accuracy'])
+        plt.plot(history.history['val_accuracy'])
+        plt.title('model accuracy')
+        plt.ylabel('accuracy')
+        plt.xlabel('epoch')
+        plt.legend(['train', 'test'], loc='upper left')
+        plt.show()
+    except KeyError:
+        pass
+    # summarize history for loss
+    plt.plot(history.history['loss'])
+    plt.plot(history.history['val_loss'])
+    plt.title('model loss')
+    plt.ylabel('loss')
+    plt.xlabel('epoch')
+    plt.legend(['train', 'test'], loc='upper left')
+    plt.show()
+
 def main():
+    log.basicConfig(level=log.INFO, stream=sys.stdout)
     new_model = False
     while True:
         name = input(f"Model name: [{pm.DEFAULT_MODEL}] ")
@@ -92,12 +118,21 @@ def main():
     # Train
     if retrain == "y" or retrain == "t":
         xx, y, scaler = obtain_vectors(pm.TRAIN_DATA, "train")
+        log.info(f"Training data shape: {xx.shape} -> {y.shape}")
 
-        epochs = int(input("Epochs: "))
-        history = model.fit(xx, y, epochs=epochs, verbose=1, validation_split=pm.SPLIT)
+        try:
+            epochs = int(input("Epochs: "))
+        except ValueError:
+            epochs = 0
+
+        if epochs <= 0:
+            log.error("Ah yes, training for 0 epochs. That's a good idea.")
+
+        log.info(f"Training model for {epochs} epochs")
+        history = model.fit(xx, y, epochs=epochs, verbose=1, validation_split=pm.SPLIT, shuffle=True)
         tf.keras.models.save_model(model, pm.MODEL_DIR + "/" + name + ".h5")
-        print(history)
-        print("Saved model to disk")
+        print_history(history)
+        log.info("Saved model to disk")
 
     # Predict
     predict(model)

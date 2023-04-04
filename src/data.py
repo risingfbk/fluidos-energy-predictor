@@ -6,7 +6,7 @@ from sklearn.preprocessing import MinMaxScaler
 
 import src.parameters as pm
 from src import parameters as pm
-
+import logging as log
 
 def load_data(file: str, mode: str) -> tuple[None, np.ndarray]:
     threshold = pm.TRAIN_SIZE if mode == "train" else pm.TEST_SIZE
@@ -17,10 +17,10 @@ def load_data(file: str, mode: str) -> tuple[None, np.ndarray]:
     file = pm.DATA_DIR + "/" + file
 
     if os.path.exists(file + ".npy"):
-        print(f"Reading data from {file} cache...")
+        log.info(f"Reading cached data from {file}.npy")
         return None, np.load(file + ".npy")  # np.load(file + "_ts.npy")
 
-    print("Reading data...")
+    log.info(f"Reading data from {file}")
     with open(file, 'r') as f:
         # data be like
         # 38154,69b2e9507bc26035b4f7d2ce084d17029c40ddf06a7b846f667a287896c54e4e,
@@ -39,7 +39,7 @@ def load_data(file: str, mode: str) -> tuple[None, np.ndarray]:
             if len(float_inputs) > threshold + 1:
                 break
 
-    print("Computing moving average...")
+    log.debug("Computing moving average...")
     for _ in tqdm.tqdm(range(pm.MVAVG)):
         for i in range(1, len(float_inputs) - 1):
             float_inputs[i] = (float_inputs[i] + float_inputs[i - 1]) / 2
@@ -70,11 +70,11 @@ def split_sequence(sequence, n_steps_in, n_steps_out, ywindow, filename):
         'samples_' + ",".join([str(a) for a in [n_steps_in, n_steps_out, ywindow, filename, len(sequence)]])
 
     if os.path.exists(seq_filename + '.npy'):
-        print("Reading samples from cache...")
+        log.info(f"Using cached data for {filename}...")
         return np.load(seq_filename + '.npy'), np.load(seq_filename + '_y.npy')
 
     else:
-        print("Obtaining samples...")
+        log.info(f"Generating data for {filename}...")
         for i in tqdm.tqdm(range(len(sequence) - ywindow - n_steps_in + 1)):
             # find the end of this pattern
             end_ix = i + n_steps_in
@@ -94,7 +94,18 @@ def split_sequence(sequence, n_steps_in, n_steps_out, ywindow, filename):
         return np.array(xx), np.array(y)
 
 
-def obtain_vectors(data_file: str, mode: str) -> (np.ndarray, np.ndarray, MinMaxScaler):
+def obtain_vectors(data_file: str | list[str], mode: str) -> (np.ndarray, np.ndarray, MinMaxScaler):
+    if isinstance(data_file, list):
+        xxmerge, ymerge = [], []
+        for i in range(len(data_file)):
+            xx, y, _ = obtain_vectors(data_file[i], mode)
+            xxmerge.append(xx)
+            ymerge.append(y)
+
+        xx = np.concatenate(xxmerge)
+        y = np.concatenate(ymerge)
+        return xx, y, None
+
     ts, float_inputs = load_data(data_file, mode)
     float_inputs = np.array(float_inputs)
 
@@ -106,6 +117,6 @@ def obtain_vectors(data_file: str, mode: str) -> (np.ndarray, np.ndarray, MinMax
     # split into samples
     xx, y = split_sequence(dataset, pm.STEPS_IN, pm.STEPS_OUT, pm.YWINDOW, pm.TEST_FILENAME)
     xx = xx.reshape((xx.shape[0], xx.shape[1], pm.N_FEATURES))
-    print("Working with", xx.shape, " ", y.shape, "samples")
+    log.debug("Working with", xx.shape, " ", y.shape, "samples")
 
     return xx, y, scaler
