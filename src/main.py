@@ -24,7 +24,8 @@ def obtain_model() -> tf.keras.Sequential:
     )
     model.add(LSTM(pm.UNITS))
     model.add(tf.keras.layers.Dense(pm.STEPS_OUT))
-    model.compile(optimizer=opt, loss='mse', metrics=['accuracy', 'mse'])
+    model.compile(optimizer=opt, metrics=['accuracy', 'mse'],
+                  loss=tf.keras.losses.BinaryCrossentropy(from_logits=True))
     return model
 
 
