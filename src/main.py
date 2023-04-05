@@ -24,8 +24,10 @@ def obtain_model() -> tf.keras.Sequential:
     )
     model.add(LSTM(pm.UNITS))
     model.add(tf.keras.layers.Dense(pm.STEPS_OUT))
+
     model.compile(optimizer=opt, metrics=['accuracy', 'mse'],
                   loss=tf.keras.losses.BinaryCrossentropy(from_logits=True))
+
     return model
 
 
@@ -153,7 +155,8 @@ def main():
             log.error("Ah yes, training for 0 epochs. That's a good idea.")
 
         log.info(f"Training model for {epochs} epochs")
-        history = model.fit(xx, y, epochs=epochs, verbose=1, validation_split=pm.SPLIT, shuffle=True)
+        history = model.fit(xx, y, epochs=epochs, verbose=1, validation_split=pm.SPLIT, shuffle=True,
+                            callbacks=[tf.keras.callbacks.EarlyStopping(monitor='val_loss', patience=pm.PATIENCE)])
         tf.keras.models.save_model(model, pm.MODEL_DIR + "/" + name + ".h5")
         print_history(history)
         log.info("Saved model to disk")
