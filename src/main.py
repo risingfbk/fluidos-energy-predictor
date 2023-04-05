@@ -14,13 +14,17 @@ import matplotlib.pyplot as plt
 
 
 def obtain_model() -> tf.keras.Sequential:
+    opt = tf.keras.optimizers.Adagrad(
+        learning_rate=pm.LEARNING_RATE,
+    )
+
     model = tf.keras.Sequential()
     model.add(
         LSTM(pm.UNITS, return_sequences=True, input_shape=(pm.STEPS_IN, pm.N_FEATURES))
     )
     model.add(LSTM(pm.UNITS))
     model.add(tf.keras.layers.Dense(pm.STEPS_OUT))
-    model.compile(optimizer='RMSprop', loss='mse', metrics=['accuracy', 'mse'])
+    model.compile(optimizer=opt, loss='mse', metrics=['accuracy', 'mse'])
     return model
 
 
@@ -152,7 +156,6 @@ def main():
         tf.keras.models.save_model(model, pm.MODEL_DIR + "/" + name + ".h5")
         print_history(history)
         log.info("Saved model to disk")
-
     # Predict
     predict(model)
 
