@@ -49,7 +49,8 @@ def predict(model):
     np.savetxt(pm.LOG_FOLDER + "/pred/upper.csv", yhat_history[:, 0, 2], delimiter=",")
     np.savetxt(pm.LOG_FOLDER + "/pred/actual.csv", y2[:, 1], delimiter=",")
 
-    plt.tight_layout()
+    # New plot
+    plt.figure(figsize=(20, 10))
     plt.plot(yhat_history[:, 0, 0], label='target')
     plt.plot(yhat_history[:, 0, 1], label='lower')
     plt.plot(yhat_history[:, 0, 2], label='upper')
@@ -63,6 +64,7 @@ def print_history(history):
     log.info("Available keys: " + str(history.history.keys()))
     try:
         # summarize history for accuracy
+        plt.figure(figsize=(20, 10))
         plt.plot(history.history['accuracy'])
         plt.plot(history.history['val_accuracy'])
         plt.title('model accuracy')
