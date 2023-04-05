@@ -14,9 +14,10 @@ import matplotlib.pyplot as plt
 
 
 def obtain_model() -> tf.keras.Sequential:
-    opt = tf.keras.optimizers.Adagrad(
-        learning_rate=pm.LEARNING_RATE,
-    )
+    # opt = tf.keras.optimizers.Adagrad(learning_rate=pm.LEARNING_RATE)
+    # loss = tf.keras.losses.BinaryCrossentropy(from_logits=True)
+    opt = tf.keras.optimizers.Adam(learning_rate=pm.LEARNING_RATE)
+    loss = tf.keras.losses.MeanSquaredError()
 
     model = tf.keras.Sequential()
     model.add(
@@ -25,8 +26,7 @@ def obtain_model() -> tf.keras.Sequential:
     model.add(LSTM(pm.UNITS))
     model.add(tf.keras.layers.Dense(pm.STEPS_OUT))
 
-    model.compile(optimizer=opt, metrics=['accuracy', 'mse'],
-                  loss=tf.keras.losses.BinaryCrossentropy(from_logits=True))
+    model.compile(optimizer=opt, metrics=['accuracy', 'mse'], loss=loss)
 
     return model
 
@@ -56,7 +56,23 @@ def predict(model):
     np.savetxt(pm.LOG_FOLDER + "/pred/upper.csv", yhat_history[:, 0, 2], delimiter=",")
     np.savetxt(pm.LOG_FOLDER + "/pred/actual.csv", y2[:, 1], delimiter=",")
 
-    # New plot
+    # New plot. We plot y as a line, while for the predictions,
+    # each data point is an estimate for the subsequent pm.YWINDOW data points.
+    # We plot the lower and upper bounds as a shaded area.
+
+    #     plt.figure(figsize=(20, 10))
+    #     plt.plot(yhat_history[:, 0, 0], label='target')
+    #     plt.plot(y2[:, 1], label='actual')
+    #     plt.fill_between(
+    #         range(len(yhat_history[:, 0, 0])),
+    #         yhat_history[:, 0, 1],
+    #         yhat_history[:, 0, 2],
+    #         alpha=0.5,
+    #         label='prediction interval'
+    #     )
+    #     plt.legend()
+    #     plt.savefig(pm.LOG_FOLDER + "/prediction.png")
+
     plt.figure(figsize=(20, 10))
     plt.plot(yhat_history[:, 0, 0], label='target')
     plt.plot(yhat_history[:, 0, 1], label='lower')
@@ -64,6 +80,7 @@ def predict(model):
     plt.plot(y2[:, 1], label='actual')
     plt.legend()
     plt.savefig(pm.LOG_FOLDER + "/prediction.png")
+
 
 
 def print_history(history):

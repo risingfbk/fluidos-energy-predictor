@@ -70,11 +70,11 @@ def split_sequence(sequence, n_steps_in, n_steps_out, ywindow, filename):
                    'samples_' + ",".join([str(a) for a in [n_steps_in, n_steps_out, ywindow, filename, len(sequence)]])
 
     if os.path.exists(seq_filename + '.npy'):
-        log.info(f"Using cached data for {filename}...")
+        log.info(f"Using cached sequences for {seq_filename}...")
         return np.load(seq_filename + '.npy'), np.load(seq_filename + '_y.npy')
 
     else:
-        log.info(f"Generating data for {filename}...")
+        log.info(f"Generating sequences for {seq_filename}...")
         for i in tqdm.tqdm(range(len(sequence) - ywindow - n_steps_in + 1)):
             # find the end of this pattern
             end_ix = i + n_steps_in
@@ -94,7 +94,7 @@ def split_sequence(sequence, n_steps_in, n_steps_out, ywindow, filename):
         return np.array(xx), np.array(y)
 
 
-def obtain_vectors(data_file: str | list[str], mode: str) -> (np.ndarray, np.ndarray, MinMaxScaler):
+def obtain_vectors(data_file: str, mode: str) -> (np.ndarray, np.ndarray, MinMaxScaler):
     if isinstance(data_file, list):
         xxmerge, ymerge = [], []
         for i in range(len(data_file)):
@@ -115,7 +115,7 @@ def obtain_vectors(data_file: str | list[str], mode: str) -> (np.ndarray, np.nda
     dataset = trans_back(scaler, float_inputs)
 
     # split into samples
-    xx, y = split_sequence(dataset, pm.STEPS_IN, pm.STEPS_OUT, pm.YWINDOW, pm.TEST_DATA)
+    xx, y = split_sequence(dataset, pm.STEPS_IN, pm.STEPS_OUT, pm.YWINDOW, data_file)
     xx = xx.reshape((xx.shape[0], xx.shape[1], pm.N_FEATURES))
     log.debug("Working with", xx.shape, " ", y.shape, "samples")
 
