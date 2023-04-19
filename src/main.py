@@ -2,7 +2,6 @@ import logging as log
 import os
 import random
 
-import matplotlib.pyplot as plt
 import numpy as np
 import tensorflow as tf
 from keras.layers import LSTM
@@ -10,6 +9,7 @@ from keras.layers import LSTM
 import src.parameters as pm
 from src.data import obtain_vectors
 from src.log import initialize_log, tqdm_wrapper
+from src.plot import plot_prediction, plot_history
 
 
 def obtain_model() -> tf.keras.Sequential:
@@ -54,56 +54,10 @@ def predict(model: tf.keras.Model, test_data: list[str]):
     np.savetxt(pm.LOG_FOLDER + "/pred/lower.csv", yhat_history[:, 0, 1], delimiter=",")
     np.savetxt(pm.LOG_FOLDER + "/pred/upper.csv", yhat_history[:, 0, 2], delimiter=",")
     np.savetxt(pm.LOG_FOLDER + "/pred/actual.csv", y2[:, 1], delimiter=",")
+    np.save(pm.LOG_FOLDER + "/pred/yhat_history.npy", yhat_history)
+    np.save(pm.LOG_FOLDER + "/pred/y2.npy", y2)
 
-    # New plot. We plot y as a line, while for the predictions,
-    # each data point is an estimate for the subsequent pm.YWINDOW data points.
-    # We plot the lower and upper bounds as a shaded area.
-
-    #     plt.figure(figsize=(20, 10))
-    #     plt.plot(yhat_history[:, 0, 0], label='target')
-    #     plt.plot(y2[:, 1], label='actual')
-    #     plt.fill_between(
-    #         range(len(yhat_history[:, 0, 0])),
-    #         yhat_history[:, 0, 1],
-    #         yhat_history[:, 0, 2],
-    #         alpha=0.5,
-    #         label='prediction interval'
-    #     )
-    #     plt.legend()
-    #     plt.savefig(pm.LOG_FOLDER + "/prediction.png")
-
-    plt.figure(figsize=(20, 10))
-    plt.plot(yhat_history[:, 0, 0], label='target')
-    plt.plot(yhat_history[:, 0, 1], label='lower')
-    plt.plot(yhat_history[:, 0, 2], label='upper')
-    plt.plot(y2[:, 1], label='actual')
-    plt.legend()
-    plt.savefig(pm.LOG_FOLDER + "/prediction.png")
-
-
-def print_history(history):
-    # list all data in history
-    log.info("Available keys: " + str(history.history.keys()))
-    try:
-        # summarize history for accuracy
-        plt.figure(figsize=(20, 10))
-        plt.plot(history.history['accuracy'])
-        plt.plot(history.history['val_accuracy'])
-        plt.title('model accuracy')
-        plt.ylabel('accuracy')
-        plt.xlabel('epoch')
-        plt.legend(['train', 'test'], loc='upper left')
-        plt.savefig(pm.LOG_FOLDER + "/accuracy.png")
-    except KeyError:
-        pass
-    # summarize history for loss
-    plt.plot(history.history['loss'])
-    plt.plot(history.history['val_loss'])
-    plt.title('model loss')
-    plt.ylabel('loss')
-    plt.xlabel('epoch')
-    plt.legend(['train', 'test'], loc='upper left')
-    plt.savefig(pm.LOG_FOLDER + "/loss.png")
+    return yhat_history, y2
 
 
 def main():
@@ -186,10 +140,13 @@ def main():
         history = model.fit(xx, y, epochs=epochs, verbose=1, validation_split=pm.SPLIT, shuffle=True,
                             callbacks=[tf.keras.callbacks.EarlyStopping(monitor='val_loss', patience=pm.PATIENCE)])
         tf.keras.models.save_model(model, pm.MODEL_DIR + "/" + name + ".h5")
-        print_history(history)
         log.info("Saved model to disk")
+        plot_history(history)
+
     # Predict
-    predict(model, test_data)
+    history, truth = predict(model, test_data)
+    plot_prediction(history, truth)
+
 
 
 if __name__ == '__main__':
