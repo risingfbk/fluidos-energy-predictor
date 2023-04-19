@@ -7,9 +7,10 @@ import tensorflow as tf
 from keras.layers import LSTM
 
 import src.parameters as pm
+import src.secrets as pms
 from src.data import obtain_vectors
 from src.log import initialize_log, tqdm_wrapper
-from src.plot import plot_prediction, plot_history
+from src.plot import plot_prediction, plot_history, save_prediction
 
 
 def obtain_model() -> tf.keras.Sequential:
@@ -47,16 +48,6 @@ def predict(model: tf.keras.Model, test_data: list[str]):
         yhat_history.append(yhat)
 
     yhat_history = np.array(yhat_history)
-
-    # Dump the prediction to a file
-    os.makedirs(pm.LOG_FOLDER + "/pred", exist_ok=True)
-    np.savetxt(pm.LOG_FOLDER + "/pred/prediction.csv", yhat_history[:, 0, 0], delimiter=",")
-    np.savetxt(pm.LOG_FOLDER + "/pred/lower.csv", yhat_history[:, 0, 1], delimiter=",")
-    np.savetxt(pm.LOG_FOLDER + "/pred/upper.csv", yhat_history[:, 0, 2], delimiter=",")
-    np.savetxt(pm.LOG_FOLDER + "/pred/actual.csv", y2[:, 1], delimiter=",")
-    np.save(pm.LOG_FOLDER + "/pred/yhat_history.npy", yhat_history)
-    np.save(pm.LOG_FOLDER + "/pred/y2.npy", y2)
-
     return yhat_history, y2
 
 
@@ -67,15 +58,46 @@ def main():
     os.makedirs(pm.MODEL_DIR, exist_ok=True)
     os.makedirs(pm.DATA_DIR, exist_ok=True)
 
-    files_to_be_chosen = pm.TRAIN_FILE_AMOUNT + pm.TEST_FILE_AMOUNT
-    files = os.listdir(pm.DATA_DIR)
-    if len(files) < files_to_be_chosen:
-        raise EnvironmentError(f"Insufficient data. You need at least {files_to_be_chosen} files in {pm.DATA_DIR}")
+    files_to_be_chosen = 0
+    if pms.TEST_FILES is not None:
+        test_data = pms.TEST_FILES
+        files_to_be_chosen += len(test_data)
+    else:
+        test_data = None
+        files_to_be_chosen += pm.TEST_FILE_AMOUNT
 
-    # Choose files to be used for training and testing
-    chosen = random.sample(files, files_to_be_chosen)
-    train_data = chosen[:pm.TRAIN_FILE_AMOUNT]
-    test_data = chosen[pm.TRAIN_FILE_AMOUNT:]
+    if pms.TRAIN_FILES is not None:
+        train_data = pms.TRAIN_FILES
+        files_to_be_chosen += len(train_data)
+    else:
+        train_data = None
+        files_to_be_chosen += pm.TRAIN_FILE_AMOUNT
+
+    if files_to_be_chosen == 0:
+        raise EnvironmentError("You need to specify at least one file for training and one for testing.")
+
+    if train_data is None or test_data is None:
+        files = os.listdir(pm.DATA_DIR)
+        files = [x for x in files if x.endswith(".csv")]
+
+        if len(files) < files_to_be_chosen:
+            raise EnvironmentError(f"Insufficient data. You need at least {files_to_be_chosen} files in {pm.DATA_DIR}")
+
+        # Choose files to be used for training and testing
+        chosen = random.sample(files, files_to_be_chosen)
+        if train_data is None:
+            train_data = random.sample(chosen, pm.TRAIN_FILE_AMOUNT)
+            chosen = [x for x in chosen if x not in train_data]
+
+        if test_data is None:
+            test_data = random.sample(chosen, pm.TEST_FILE_AMOUNT)
+            chosen = [x for x in chosen if x not in test_data]
+
+        if len(chosen) > 0:
+            raise EnvironmentError(f"Something went wrong. {len(chosen)} files were not used.")
+
+    if len(train_data) == 0 or len(test_data) == 0:
+        raise EnvironmentError("Something went wrong. You need to specify at least one file for training and one for testing.")
 
     log.info("Training files: " + str(train_data))
     log.info("Testing files: " + str(test_data))
@@ -145,8 +167,8 @@ def main():
 
     # Predict
     history, truth = predict(model, test_data)
+    save_prediction(history, truth)
     plot_prediction(history, truth)
-
 
 
 if __name__ == '__main__':
