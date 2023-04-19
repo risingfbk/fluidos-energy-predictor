@@ -1,16 +1,15 @@
 import logging as log
 import os
-import sys
+import random
 
+import matplotlib.pyplot as plt
 import numpy as np
 import tensorflow as tf
-import tqdm as tqdm
 from keras.layers import LSTM
 
 import src.parameters as pm
 from src.data import obtain_vectors
-from src.log import initialize_log
-import matplotlib.pyplot as plt
+from src.log import initialize_log, tqdm_wrapper
 
 
 def obtain_model() -> tf.keras.Sequential:
@@ -31,8 +30,8 @@ def obtain_model() -> tf.keras.Sequential:
     return model
 
 
-def predict(model):
-    xx2, y2, scaler = obtain_vectors(pm.TEST_DATA, "test")
+def predict(model: tf.keras.Model, test_data: list[str]):
+    xx2, y2 = obtain_vectors(test_data, "test")
 
     __min = min(len(y2), pm.TEST_SIZE)
     xx2 = xx2[:__min + 1]
@@ -41,7 +40,7 @@ def predict(model):
     yhat_history = []
 
     log.info("Predicting...")
-    for i in tqdm.tqdm(range(__min)):
+    for i in tqdm_wrapper(range(__min)):
         x_input = np.array(xx2[i])
         x_input = x_input.reshape((1, pm.STEPS_IN, pm.N_FEATURES))
         yhat = model.predict(x_input, verbose=0)
@@ -82,7 +81,6 @@ def predict(model):
     plt.savefig(pm.LOG_FOLDER + "/prediction.png")
 
 
-
 def print_history(history):
     # list all data in history
     log.info("Available keys: " + str(history.history.keys()))
@@ -109,11 +107,25 @@ def print_history(history):
 
 
 def main():
+    initialize_log("INFO")
+
     os.makedirs(pm.LOG_FOLDER, exist_ok=True)
     os.makedirs(pm.MODEL_DIR, exist_ok=True)
     os.makedirs(pm.DATA_DIR, exist_ok=True)
 
-    initialize_log("INFO")
+    files_to_be_chosen = pm.TRAIN_FILE_AMOUNT + pm.TEST_FILE_AMOUNT
+    files = os.listdir(pm.DATA_DIR)
+    if len(files) < files_to_be_chosen:
+        raise EnvironmentError(f"Insufficient data. You need at least {files_to_be_chosen} files in {pm.DATA_DIR}")
+
+    # Choose files to be used for training and testing
+    chosen = random.sample(files, files_to_be_chosen)
+    train_data = chosen[:pm.TRAIN_FILE_AMOUNT]
+    test_data = chosen[pm.TRAIN_FILE_AMOUNT:]
+
+    log.info("Training files: " + str(train_data))
+    log.info("Testing files: " + str(test_data))
+
     new_model = False
     while True:
         name = input(f"Model name: [{pm.DEFAULT_MODEL}] ")
@@ -149,7 +161,6 @@ def main():
 
     log.info(f"Model name: {name}; Retrain: {retrain}; New model: {new_model}")
 
-
     # Load model eventually
     if not new_model:
         model = tf.keras.models.load_model(pm.MODEL_DIR + "/" + name + ".h5")
@@ -160,7 +171,7 @@ def main():
 
     # Train
     if retrain == "y" or retrain == "t":
-        xx, y, scaler = obtain_vectors(pm.TRAIN_DATA, "train")
+        xx, y = obtain_vectors(train_data, "train")
         log.info(f"Training data shape: {xx.shape} -> {y.shape}")
 
         try:
@@ -178,7 +189,7 @@ def main():
         print_history(history)
         log.info("Saved model to disk")
     # Predict
-    predict(model)
+    predict(model, test_data)
 
 
 if __name__ == '__main__':

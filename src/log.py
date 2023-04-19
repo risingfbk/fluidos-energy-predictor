@@ -1,11 +1,8 @@
 import datetime as dt
-import functools
 import inspect
 import logging as log
 import os
 import sys
-import timeit
-from typing import Callable, Any
 
 from tqdm import tqdm
 
@@ -85,7 +82,6 @@ def initialize_log(log_level: str = "DEBUG",
 def tqdm_wrapper(iterable, **kwargs):
     # get name of calling function
     return tqdm(iterable,
-                # insert name of calling function here
                 desc=f"Function {inspect.stack()[1][3]} cycling over a {type(iterable).__name__}",
                 leave=False,
                 file=sys.stdout,

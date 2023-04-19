@@ -2,17 +2,16 @@ import logging as log
 import os
 
 import numpy as np
-import tqdm as tqdm
 from sklearn.preprocessing import MinMaxScaler
 
 from src import parameters as pm
+from src.log import tqdm_wrapper
 
 
 def load_data(file: str, mode: str) -> tuple[None, np.ndarray]:
     threshold = pm.TRAIN_SIZE if mode == "train" else pm.TEST_SIZE
 
-    ts = []
-    float_inputs = []
+    res = []
 
     file = pm.DATA_DIR + "/" + file
 
@@ -29,18 +28,23 @@ def load_data(file: str, mode: str) -> tuple[None, np.ndarray]:
         # 0.05243749999984478,0.3073234558105469,300000
         # that is, timestamp,container_id,task_id,node_id,cpu,mem,?
         # we are only interested in timestamp,cpu
-        for line in tqdm.tqdm(f):
-            timestamp, _, _, _, cpu, *_ = line.split(',')
+        for line in tqdm_wrapper(f):
+            fts, _, _, _, cpu, *_ = line.split(',')
+            # timestamp be like: filename:12341513
+            filename, timestamp = fts.split(':')
+
             try:
-                float_inputs.append(float(cpu))
-                ts.append(timestamp)
+                res.append((int(timestamp), float(cpu)))
             except ValueError:
                 pass
-            if len(float_inputs) > threshold + 1:
+            if len(res) > threshold + 1:
                 break
 
+    res.sort(key=lambda x: x[0])
+    float_inputs = [x[1] for x in res]
+
     log.debug("Computing moving average...")
-    for _ in tqdm.tqdm(range(pm.MVAVG)):
+    for _ in tqdm_wrapper(range(pm.MVAVG)):
         for i in range(1, len(float_inputs) - 1):
             float_inputs[i] = (float_inputs[i] + float_inputs[i - 1]) / 2
 
@@ -75,7 +79,7 @@ def split_sequence(sequence, n_steps_in, n_steps_out, ywindow, filename):
 
     else:
         log.info(f"Generating sequences for {seq_filename}...")
-        for i in tqdm.tqdm(range(len(sequence) - ywindow - n_steps_in + 1)):
+        for i in tqdm_wrapper(range(len(sequence) - ywindow - n_steps_in + 1)):
             # find the end of this pattern
             end_ix = i + n_steps_in
 
@@ -94,17 +98,18 @@ def split_sequence(sequence, n_steps_in, n_steps_out, ywindow, filename):
         return np.array(xx), np.array(y)
 
 
-def obtain_vectors(data_file: str, mode: str) -> (np.ndarray, np.ndarray, MinMaxScaler):
+def obtain_vectors(data_file: str | list[str], mode: str) -> (np.ndarray, np.ndarray):  # , MinMaxScaler):
     if isinstance(data_file, list):
         xxmerge, ymerge = [], []
         for i in range(len(data_file)):
-            xx, y, _ = obtain_vectors(data_file[i], mode)
+            # xx, y, _ = obtain_vectors(data_file[i], mode)
+            xx, y = obtain_vectors(data_file[i], mode)
             xxmerge.append(xx)
             ymerge.append(y)
 
         xx = np.concatenate(xxmerge)
         y = np.concatenate(ymerge)
-        return xx, y, None
+        return xx, y  # , scaler
 
     ts, float_inputs = load_data(data_file, mode)
     float_inputs = np.array(float_inputs)
@@ -119,4 +124,4 @@ def obtain_vectors(data_file: str, mode: str) -> (np.ndarray, np.ndarray, MinMax
     xx = xx.reshape((xx.shape[0], xx.shape[1], pm.N_FEATURES))
     log.debug("Working with", xx.shape, " ", y.shape, "samples")
 
-    return xx, y, scaler
+    return xx, y  # , scaler
