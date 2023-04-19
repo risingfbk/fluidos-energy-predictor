@@ -7,7 +7,7 @@ import tensorflow as tf
 from keras.layers import LSTM
 
 import src.parameters as pm
-import src.secrets as pms
+import src.secret_parameters as pms
 from src.data import obtain_vectors
 from src.log import initialize_log, tqdm_wrapper
 from src.plot import plot_prediction, plot_history, save_prediction

@@ -5,7 +5,7 @@ import numpy as np
 from matplotlib import pyplot as plt
 
 from src import parameters as pm
-from src import secrets as pms
+from src import secret_parameters as pms
 from src.log import initialize_log
 
 

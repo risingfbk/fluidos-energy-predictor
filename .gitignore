@@ -2,7 +2,7 @@ data
 models
 out
 .idea
-secrets.py
+secret_parameters.py
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
