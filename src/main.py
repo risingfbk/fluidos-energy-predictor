@@ -148,16 +148,22 @@ def main():
     # Train
     if retrain == "y" or retrain == "t":
         try:
-            epochs = int(input("Epochs: "))
+            epochs = input("Epochs: ")
+            epochs = float(epochs)
+            if int(epochs) != epochs:
+                log.error("Ah yes, training for a non-integer amount of epochs. That's a good idea.")
+                exit(1)
+            epochs = int(epochs)
         except ValueError:
-            epochs = 0
+            log.error("Ah yes, training for NaN epochs. That's a good idea.")
+            exit(1)
 
         if epochs <= 0:
             log.error("Ah yes, training for 0 epochs. That's a good idea.")
+            exit(1)
 
         xx, y = obtain_vectors(train_data, "train")
         log.info(f"Training data shape: {xx.shape} -> {y.shape}")
-
 
         log.info(f"Training model for {epochs} epochs")
         history = model.fit(xx, y, epochs=epochs, verbose=1, validation_split=pm.SPLIT, shuffle=True,
