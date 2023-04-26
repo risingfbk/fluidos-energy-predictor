@@ -147,9 +147,6 @@ def main():
 
     # Train
     if retrain == "y" or retrain == "t":
-        xx, y = obtain_vectors(train_data, "train")
-        log.info(f"Training data shape: {xx.shape} -> {y.shape}")
-
         try:
             epochs = int(input("Epochs: "))
         except ValueError:
@@ -157,6 +154,10 @@ def main():
 
         if epochs <= 0:
             log.error("Ah yes, training for 0 epochs. That's a good idea.")
+
+        xx, y = obtain_vectors(train_data, "train")
+        log.info(f"Training data shape: {xx.shape} -> {y.shape}")
+
 
         log.info(f"Training model for {epochs} epochs")
         history = model.fit(xx, y, epochs=epochs, verbose=1, validation_split=pm.SPLIT, shuffle=True,
