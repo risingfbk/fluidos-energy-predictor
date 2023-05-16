@@ -9,27 +9,48 @@ from src import secret_parameters as pms
 from src.log import initialize_log
 
 
-def save_prediction(yhat_history, y2):
+def save_prediction(yhat, y2):
     # Dump the prediction to a file
     os.makedirs(pm.LOG_FOLDER + "/pred", exist_ok=True)
-    np.savetxt(pm.LOG_FOLDER + "/pred/prediction.csv", yhat_history[:, 0, 0], delimiter=",")
-    np.savetxt(pm.LOG_FOLDER + "/pred/lower.csv", yhat_history[:, 0, 1], delimiter=",")
-    np.savetxt(pm.LOG_FOLDER + "/pred/upper.csv", yhat_history[:, 0, 2], delimiter=",")
+    np.savetxt(pm.LOG_FOLDER + "/pred/prediction.csv", yhat[:, 0], delimiter=",")
+    np.savetxt(pm.LOG_FOLDER + "/pred/lower.csv", yhat[:, 1], delimiter=",")
+    np.savetxt(pm.LOG_FOLDER + "/pred/upper.csv", yhat[:, 2], delimiter=",")
     np.savetxt(pm.LOG_FOLDER + "/pred/actual.csv", y2[:, 1], delimiter=",")
-    np.save(pm.LOG_FOLDER + "/pred/yhat_history.npy", yhat_history)
+    np.save(pm.LOG_FOLDER + "/pred/yhat_history.npy", yhat)
     np.save(pm.LOG_FOLDER + "/pred/y2.npy", y2)
 
-def plot_prediction(yhat_history, truth, start=0, end=None):
+
+def plot_prediction(yhat, truth, start=0, end=None):
     if end is None:
-        end = len(yhat_history)
+        end = len(yhat)
 
     plt.figure(figsize=(20, 10))
-    plt.plot(yhat_history[start:end, 0, 0], label='prediction')
-    plt.plot(yhat_history[start:end, 0, 1], label='lower')
-    plt.plot(yhat_history[start:end, 0, 2], label='upper')
-    plt.plot(truth[start:end, 1], label='actual')
+    plt.plot(yhat[start:end, 0], label='prediction', linestyle='-.', alpha=.7, color='r')
+    plt.plot(yhat[start:end, 1], label='lower', linestyle='--', alpha=.6, color='r')
+    plt.plot(yhat[start:end, 2], label='upper', linestyle='--', alpha=.6, color='r')
+    plt.plot(truth[start:end, 0], label='actual', linestyle='-', alpha=.5, color='b')
+    plt.plot(truth[start:end, 1], label='actual lower', linestyle=':', alpha=.4, color='b')
+    plt.plot(truth[start:end, 2], label='actual upper', linestyle=':', alpha=.4, color='b')
+
+    # fill with color
+    plt.fill_between(
+        np.arange(start, end),
+        yhat[start:end, 1],
+        yhat[start:end, 2],
+        color='r',
+        alpha=.15
+    )
+
+    plt.fill_between(
+        np.arange(start, end),
+        truth[start:end, 1],
+        truth[start:end, 2],
+        color='b',
+        alpha=.15
+    )
     plt.legend()
     plt.savefig(pm.LOG_FOLDER + f"/prediction-{start}-{end}.png")
+
 
 def plot_history(history):
     # list all data in history
@@ -75,13 +96,17 @@ def plot_history(history):
     #     plt.savefig(pm.LOG_FOLDER + "/prediction.png")
 
 
-if __name__ == "__main__":
+def plot_splitter():
     file = pms.PLOT_FILE
-    yhat_history = np.load(file + "/pred/yhat_history.npy")
-    y2 = np.load(file + "/pred/y2.npy")
+    history = np.load(file + "/pred/yhat_history.npy")
+    truth = np.load(file + "/pred/y2.npy")
 
     initialize_log("INFO", "plot")
-    for i in range(0, len(yhat_history), 500):
-        plot_prediction(yhat_history, y2, i, i + 500)
+    for i in range(0, len(history), 500):
+        plot_prediction(history, truth, i, i + 500)
 
     print("Done!")
+
+
+if __name__ == "__main__":
+    plot_splitter()

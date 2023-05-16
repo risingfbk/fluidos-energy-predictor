@@ -9,8 +9,6 @@ from src.log import tqdm_wrapper
 
 
 def load_data(file: str, mode: str) -> tuple[None, np.ndarray]:
-    threshold = pm.TRAIN_SIZE if mode == "train" else pm.TEST_SIZE
-
     res = []
 
     file = pm.DATA_DIR + "/" + file
@@ -22,34 +20,37 @@ def load_data(file: str, mode: str) -> tuple[None, np.ndarray]:
     log.info(f"Reading data from {file}")
     with open(file, 'r') as f:
         # data be like
-        # 38154,69b2e9507bc26035b4f7d2ce084d17029c40ddf06a7b846f667a287896c54e4e,
-        # 47f4004bd44f0fa53cd04c14d073518dde281f56c8244de8f81248490a0fbd48,
-        # K8adcea9c2aca0eebe4ebbead8ad711caf677287d58b396389a6b16c2bf09ae06,
-        # 0.05243749999984478,0.3073234558105469,300000
-        # that is, timestamp,container_id,task_id,node_id,cpu,mem,?
-        # we are only interested in timestamp,cpu
+        # timestamp,container_id,task_id,node_id,cpu,mem,idk
+        # 38154,69b..,47f4...,K8ad..., 0.052437,0.3073234,300000
+
         for line in tqdm_wrapper(f):
             fts, _, _, _, cpu, *_ = line.split(',')
+
+            # depending on the file, the timestamp can be in different positions
             # timestamp be like: filename:12341513
-            filename, timestamp = fts.split(':')
+            if ":" in fts:
+                _, timestamp = fts.split(':')
+            else:
+                timestamp = fts
 
             try:
                 res.append((int(timestamp), float(cpu)))
-            except ValueError:
+            except ValueError as e:
+                log.warning(f"Error while parsing {line}: {e}")
                 pass
-            if len(res) > threshold + 1:
-                break
+            # if len(res) > threshold + 1:
+            #    break
 
     res.sort(key=lambda x: x[0])
     float_inputs = [x[1] for x in res]
 
     log.debug("Computing moving average...")
-    for _ in tqdm_wrapper(range(pm.MVAVG)):
-        for i in range(1, len(float_inputs) - 1):
-            float_inputs[i] = (float_inputs[i] + float_inputs[i - 1]) / 2
+    # mv_avg_window = pm.SMOOTH_WINDOW
+    # mv_avg_runs = pm.SMOOTH_RUNS
 
-    # float_inputs = float_inputs[MVAVG:]
-    # ts = ts[MVAVG:]
+    # for _ in range(mv_avg_runs):
+    #     for i in tqdm_wrapper(range(len(float_inputs) - mv_avg_window)):
+    #        new_inputs.append(np.mean(float_inputs[i:i + mv_avg_window]))
 
     float_inputs = np.array(float_inputs)
     np.save(file + ".npy", float_inputs)
@@ -58,7 +59,7 @@ def load_data(file: str, mode: str) -> tuple[None, np.ndarray]:
     return None, float_inputs
 
 
-def trans_foward(scaler: MinMaxScaler, arr):
+def trans_forward(scaler: MinMaxScaler, arr):
     out_arr = scaler.transform(arr.reshape(-1, 1))
     return out_arr.flatten()
 
@@ -94,35 +95,46 @@ def split_sequence(sequence, n_steps_in, n_steps_out, ywindow, filename):
 
         np.save(seq_filename + '.npy', np.array(xx))
         np.save(seq_filename + '_y.npy', np.array(y))
-        # print(np.array(X), np.array(y))
+
         return np.array(xx), np.array(y)
 
 
-def obtain_vectors(data_file: str | list[str], mode: str) -> (np.ndarray, np.ndarray):  # , MinMaxScaler):
+def obtain_vectors(data_file: str | list[str], mode: str, keep_scaler: bool = False) -> (
+np.ndarray, np.ndarray, MinMaxScaler):
     if isinstance(data_file, list):
+        if keep_scaler:
+            raise ValueError("keep_scaler is not supported for multiple data files")
+
+        if len(data_file) == 0:
+            raise ValueError("Empty list of data files")
+
         xxmerge, ymerge = [], []
         for i in range(len(data_file)):
-            # xx, y, _ = obtain_vectors(data_file[i], mode)
-            xx, y = obtain_vectors(data_file[i], mode)
-            xxmerge.append(xx)
-            ymerge.append(y)
+            __xx, __y, _ = obtain_vectors(data_file[i], mode)
+            xxmerge.append(__xx)
+            ymerge.append(__y)
 
         xx = np.concatenate(xxmerge)
         y = np.concatenate(ymerge)
-        return xx, y  # , scaler
+
+        return xx, y, None
 
     ts, float_inputs = load_data(data_file, mode)
-    float_inputs = np.array(float_inputs)
-
-    scaler: MinMaxScaler = MinMaxScaler(feature_range=(0, 1))
-    # noinspection PyTypeChecker
-    scaler: MinMaxScaler = scaler.fit(np.array(float_inputs).reshape(-1, 1))
-    dataset = trans_back(scaler, float_inputs)
+    dataset = np.array(float_inputs)
 
     # split into samples
+    scaler = MinMaxScaler(feature_range=(0, 1))
+    scaler = scaler.fit(dataset.reshape(-1, 1))
+    dataset = trans_forward(scaler, dataset)
+
     xx, y = split_sequence(dataset, pm.STEPS_IN, pm.STEPS_OUT, pm.YWINDOW, data_file)
-    if pm.N_FEATURES > 1:
-        xx = xx.reshape((xx.shape[0], xx.shape[1], pm.N_FEATURES))
+    # if pm.N_FEATURES > 1:
+    xx = xx.reshape((xx.shape[0], xx.shape[1], pm.N_FEATURES))
     log.debug("Working with", xx.shape, " ", y.shape, "samples")
 
-    return xx, y  # , scaler
+    return xx, y, scaler if keep_scaler else None
+
+# noinspection PyTypeChecker
+# scaler: MinMaxScaler = MinMaxScaler(feature_range=(0, 1))
+# scaler: MinMaxScaler = scaler.fit(float_inputs.reshape(-1, 1))
+# dataset = trans_forward(scaler, float_inputs)

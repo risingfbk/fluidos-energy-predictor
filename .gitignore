@@ -1,6 +1,7 @@
 data
 models
 out
+banlist
 .idea
 secret_parameters.py
 
