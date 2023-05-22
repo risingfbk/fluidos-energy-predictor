@@ -20,6 +20,8 @@ def obtain_model() -> tf.keras.Sequential:
     opt = tf.keras.optimizers.Adam(learning_rate=pm.LEARNING_RATE)
     loss = tf.keras.losses.MeanSquaredError()
 
+    accuracy = [tf.keras.metrics.RootMeanSquaredError()]
+
     model = tf.keras.Sequential()
     model.add(LSTM(pm.UNITS, return_sequences=True, input_shape=(pm.STEPS_IN, pm.N_FEATURES)))
     model.add(LSTM(pm.UNITS))
@@ -27,7 +29,8 @@ def obtain_model() -> tf.keras.Sequential:
     # model.add(tf.keras.layers.Dense(pm.STEPS_OUT, kernel_initializer='normal', activation='relu'))
     model.add(tf.keras.layers.Dense(pm.STEPS_OUT))
 
-    model.compile(optimizer=opt, loss=loss, metrics=['accuracy'])
+    model.compile(optimizer=opt, loss=loss, metrics=[accuracy])
+    model.build(input_shape=(pm.STEPS_IN, pm.N_FEATURES))
 
     return model
 
@@ -41,20 +44,49 @@ def predict(model: tf.keras.Sequential, test_data: list[str]):
 
     yhat_history = []
 
-    for i in tqdm_wrapper(range(__min)):
+    # predict every pm.STEPS_OUT steps
+    for i in tqdm_wrapper(range(0, __min, pm.STEPS_OUT)):
         x_input = np.array(xx2[i])
         x_input = x_input.reshape((1, pm.STEPS_IN, pm.N_FEATURES))
         yhat = model.predict(x_input, verbose=0)
-        yhat = trans_back(scaler, yhat)
         yhat_history.append(yhat)
 
-    yhat_history = np.array(yhat_history)
+    yhat_history = np.array(yhat_history).flatten()
+
     save_prediction(yhat_history, y2)
-    plot_prediction(yhat_history, y2)
+    plot_prediction(test_data, yhat_history, y2)
+
+    # Calculate R2 score, TP, FP, TN, FN
+    from sklearn.metrics import r2_score, f1_score, mean_squared_error
+    r2 = r2_score(y2, yhat_history)
+    #f1 = f1_score(y2, yhat_history, average="macro")
+    mse = mean_squared_error(y2, yhat_history)
+    log.info(f"R2 score: {r2}")
+    #log.info(f"F1 score: {f1}")
+    log.info(f"MSE: {mse}")
+    # calc sample standard deviation
+    std = np.std(y2)
+
+
+    yes = 0
+    no = 0
+    # for each sample, the sample is correct if the prediction is within 1 std of the actual value
+    for i in range(len(y2)):
+        if abs(yhat_history[i] - y2[i]) <= std:
+            yes += 1
+        else:
+            no += 1
+    log.info(f"Correct: {yes}")
+    log.info(f"Incorrect: {no}")
+    log.info(f"Accuracy: {yes / (yes + no)}")
+
 
 
 def main():
     initialize_log("INFO")
+
+    # Block GPU
+    os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
 
     os.makedirs(pm.LOG_FOLDER, exist_ok=True)
     os.makedirs(pm.MODEL_DIR, exist_ok=True)
@@ -96,9 +128,6 @@ def main():
         train_data = None
         files_to_be_chosen += pm.TRAIN_FILE_AMOUNT
 
-    if files_to_be_chosen == 0:
-        raise EnvironmentError("You need to specify at least one file for training and one for testing.")
-
     if train_data is None or test_data is None:
         files = os.listdir(pm.DATA_DIR)
         files = [x for x in files if x.endswith(".csv")]
@@ -119,6 +148,7 @@ def main():
         if len(chosen) > 0:
             raise EnvironmentError(f"Something went wrong. {len(chosen)} files were not used.")
 
+
     if len(train_data) == 0 or len(test_data) == 0:
         raise EnvironmentError(
             "Something went wrong. You need to specify at least one file for training and one for testing.")
@@ -131,7 +161,11 @@ def main():
     log.info("Testing files: " + str(test_data))
 
     new_model = False
-    models = [i.split(".")[0] for i in os.listdir(pm.MODEL_DIR)]
+    models = sorted([
+        i.split(".")[0] \
+        for i in os.listdir(pm.MODEL_DIR) \
+        if os.path.isfile(pm.MODEL_DIR + "/" + i + "/" + i + ".h5")
+    ])
     while True:
         print("---")
         if len(models) > 0:
@@ -157,7 +191,7 @@ def main():
                     pass
 
         print(f"Chosen model name: {name}")
-        if os.path.exists(pm.MODEL_DIR + "/" + name + ".h5"):
+        if os.path.exists(pm.MODEL_DIR + "/" + name + "/" + name + ".h5"):
             break
         else:
             print("Model not found. Would you like to train it as a new model?")
@@ -187,6 +221,8 @@ def main():
             break
 
     log.info(f"Model name: {name}; Retrain: {retrain}; New model: {new_model}")
+    pm.MODEL_DIR = os.path.join(pm.MODEL_DIR, name)
+    os.makedirs(pm.MODEL_DIR, exist_ok=True)
 
     # Load model eventually
     if not new_model:
@@ -217,9 +253,15 @@ def main():
 
         log.info(f"Training data shape: {xx.shape} -> {y.shape}")
 
+        cb = [tf.keras.callbacks.EarlyStopping(monitor='val_loss', patience=pm.PATIENCE),
+              tf.keras.callbacks.BackupAndRestore(pm.MODEL_DIR + "/backup"),
+              tf.keras.callbacks.ModelCheckpoint(pm.MODEL_DIR + "/" + name + "_chk.h5",
+                                                 save_best_only=True)]
+
         log.info(f"Training model for {epochs} epochs")
         history = model.fit(xx, y, epochs=epochs, verbose=1, validation_split=pm.SPLIT, shuffle=True,
-                            callbacks=[tf.keras.callbacks.EarlyStopping(monitor='loss', patience=pm.PATIENCE)])
+                            callbacks=cb)
+
         tf.keras.models.save_model(model, pm.MODEL_DIR + "/" + name + ".h5")
         log.info("Saved model to disk")
         plot_history(history)

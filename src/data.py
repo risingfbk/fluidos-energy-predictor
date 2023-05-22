@@ -24,6 +24,9 @@ def load_data(file: str, mode: str) -> tuple[None, np.ndarray]:
         # 38154,69b..,47f4...,K8ad..., 0.052437,0.3073234,300000
 
         for line in tqdm_wrapper(f):
+            if 'timestamp' in line:
+                continue
+
             fts, _, _, _, cpu, *_ = line.split(',')
 
             # depending on the file, the timestamp can be in different positions
@@ -72,7 +75,8 @@ def trans_back(scaler: MinMaxScaler, arr):
 def split_sequence(sequence, n_steps_in, n_steps_out, ywindow, filename):
     xx, y = [], []
     seq_filename = pm.DATA_DIR + '/' + \
-                   'samples_' + ",".join([str(a) for a in [n_steps_in, n_steps_out, ywindow, filename, len(sequence)]])
+                   'samples_' + ",".join(
+        [str(a) for a in [n_steps_in, n_steps_out, ywindow, ''.join(filename.split(".")[:-1]), len(sequence)]])
 
     if os.path.exists(seq_filename + '.npy'):
         log.info(f"Using cached sequences for {seq_filename}...")
@@ -86,10 +90,11 @@ def split_sequence(sequence, n_steps_in, n_steps_out, ywindow, filename):
 
             # gather input and output parts of the pattern
             # print(sequence[end_ix:end_ix+ywindow])
-            seq_x, seq_y = sequence[i:end_ix], \
-                [np.percentile(sequence[end_ix:end_ix + ywindow], pm.LSTM_TARGET),
-                 np.percentile(sequence[end_ix:end_ix + ywindow], pm.LSTM_LOWER),
-                 np.percentile(sequence[end_ix:end_ix + ywindow], pm.LSTM_UPPER)]
+            seq_x = sequence[i:end_ix]
+            seq_y = sequence[end_ix:end_ix + ywindow]
+            # [np.percentile(sequence[end_ix:end_ix + ywindow], pm.LSTM_TARGET),
+            #  np.percentile(sequence[end_ix:end_ix + ywindow], pm.LSTM_LOWER),
+            #  np.percentile(sequence[end_ix:end_ix + ywindow], pm.LSTM_UPPER)]
             xx.append(seq_x)
             y.append(seq_y)
 
@@ -100,7 +105,7 @@ def split_sequence(sequence, n_steps_in, n_steps_out, ywindow, filename):
 
 
 def obtain_vectors(data_file: str | list[str], mode: str, keep_scaler: bool = False) -> (
-np.ndarray, np.ndarray, MinMaxScaler):
+        np.ndarray, np.ndarray, MinMaxScaler):
     if isinstance(data_file, list):
         if keep_scaler:
             raise ValueError("keep_scaler is not supported for multiple data files")

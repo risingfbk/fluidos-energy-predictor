@@ -12,42 +12,45 @@ from src.log import initialize_log
 def save_prediction(yhat, y2):
     # Dump the prediction to a file
     os.makedirs(pm.LOG_FOLDER + "/pred", exist_ok=True)
-    np.savetxt(pm.LOG_FOLDER + "/pred/prediction.csv", yhat[:, 0], delimiter=",")
-    np.savetxt(pm.LOG_FOLDER + "/pred/lower.csv", yhat[:, 1], delimiter=",")
-    np.savetxt(pm.LOG_FOLDER + "/pred/upper.csv", yhat[:, 2], delimiter=",")
-    np.savetxt(pm.LOG_FOLDER + "/pred/actual.csv", y2[:, 1], delimiter=",")
+    np.savetxt(pm.LOG_FOLDER + "/pred/prediction.csv", yhat, delimiter=",")
+    #np.savetxt(pm.LOG_FOLDER + "/pred/lower.csv", yhat[:,  1], delimiter=",")
+    #np.savetxt(pm.LOG_FOLDER + "/pred/upper.csv", yhat[:, 2], delimiter=",")
+    np.savetxt(pm.LOG_FOLDER + "/pred/actual.csv", y2, delimiter=",")
     np.save(pm.LOG_FOLDER + "/pred/yhat_history.npy", yhat)
     np.save(pm.LOG_FOLDER + "/pred/y2.npy", y2)
 
 
-def plot_prediction(yhat, truth, start=0, end=None):
+def plot_prediction(test_data, yhat, truth, start=0, end=None):
     if end is None:
         end = len(yhat)
 
     plt.figure(figsize=(20, 10))
-    plt.plot(yhat[start:end, 0], label='prediction', linestyle='-.', alpha=.7, color='r')
-    plt.plot(yhat[start:end, 1], label='lower', linestyle='--', alpha=.6, color='r')
-    plt.plot(yhat[start:end, 2], label='upper', linestyle='--', alpha=.6, color='r')
-    plt.plot(truth[start:end, 0], label='actual', linestyle='-', alpha=.5, color='b')
-    plt.plot(truth[start:end, 1], label='actual lower', linestyle=':', alpha=.4, color='b')
-    plt.plot(truth[start:end, 2], label='actual upper', linestyle=':', alpha=.4, color='b')
+    # First, plot what was before
+    if test_data is not None:
+        pass
+    plt.plot(yhat, label='prediction', linestyle='-.', alpha=.7, color='r')
+    #plt.plot(yhat[start:end,  1], label='lower', linestyle='--', alpha=.6, color='r')
+    #plt.plot(yhat[start:end,  2], label='upper', linestyle='--', alpha=.6, color='r')
+    plt.plot(truth, label='actual', linestyle='-', alpha=.5, color='b')
+    #plt.plot(truth[start:end, 1], label='actual lower', linestyle=':', alpha=.4, color='b')
+    #plt.plot(truth[start:end, 2], label='actual upper', linestyle=':', alpha=.4, color='b')
 
     # fill with color
-    plt.fill_between(
-        np.arange(start, end),
-        yhat[start:end, 1],
-        yhat[start:end, 2],
-        color='r',
-        alpha=.15
-    )
-
-    plt.fill_between(
-        np.arange(start, end),
-        truth[start:end, 1],
-        truth[start:end, 2],
-        color='b',
-        alpha=.15
-    )
+    # plt.fill_between(
+    #     np.arange(start, end),
+    #     yhat[start:end, 1],
+    #     yhat[start:end,  2],
+    #     color='r',
+    #     alpha=.15
+    # )
+    #
+    # plt.fill_between(
+    #     np.arange(start, end),
+    #     truth[start:end, 1],
+    #     truth[start:end, 2],
+    #     color='b',
+    #     alpha=.15
+    # )
     plt.legend()
     plt.savefig(pm.LOG_FOLDER + f"/prediction-{start}-{end}.png")
 
@@ -56,27 +59,19 @@ def plot_history(history):
     # list all data in history
     log.info("Available keys: " + str(history.history.keys()))
 
-    try:
-        # summarize history for accuracy
+    for key in history.history.keys():
+        if "val" not in key:
+            continue
         plt.figure(figsize=(20, 10))
-        plt.plot(history.history['accuracy'])
-        plt.plot(history.history['val_accuracy'])
-        plt.title('model accuracy')
-        plt.ylabel('accuracy')
+        plt.plot(history.history[key])
+        plt.plot(history.history[key.replace("val_", "")])
+        plt.title('model ' + key)
+        plt.ylabel(key)
         plt.xlabel('epoch')
-        plt.legend(['train', 'test'], loc='upper left')
-        plt.savefig(pm.LOG_FOLDER + "/accuracy.png")
-    except KeyError:
-        pass
+        plt.legend(loc='upper left')
+        plt.savefig(pm.LOG_FOLDER + "/" + key + ".png")
+        plt.close()
 
-    # summarize history for loss
-    plt.plot(history.history['loss'])
-    plt.plot(history.history['val_loss'])
-    plt.title('model loss')
-    plt.ylabel('loss')
-    plt.xlabel('epoch')
-    plt.legend(['train', 'test'], loc='upper left')
-    plt.savefig(pm.LOG_FOLDER + "/loss.png")
 
     # New plot. We plot y as a line, while for the predictions,
     # each data point is an estimate for the subsequent pm.YWINDOW data points.
