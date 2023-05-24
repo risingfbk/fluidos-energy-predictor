@@ -13,14 +13,14 @@ def save_prediction(yhat, y2):
     # Dump the prediction to a file
     os.makedirs(pm.LOG_FOLDER + "/pred", exist_ok=True)
     np.savetxt(pm.LOG_FOLDER + "/pred/prediction.csv", yhat, delimiter=",")
-    #np.savetxt(pm.LOG_FOLDER + "/pred/lower.csv", yhat[:,  1], delimiter=",")
-    #np.savetxt(pm.LOG_FOLDER + "/pred/upper.csv", yhat[:, 2], delimiter=",")
+    # np.savetxt(pm.LOG_FOLDER + "/pred/lower.csv", yhat[:,  1], delimiter=",")
+    # np.savetxt(pm.LOG_FOLDER + "/pred/upper.csv", yhat[:, 2], delimiter=",")
     np.savetxt(pm.LOG_FOLDER + "/pred/actual.csv", y2, delimiter=",")
     np.save(pm.LOG_FOLDER + "/pred/yhat_history.npy", yhat)
     np.save(pm.LOG_FOLDER + "/pred/y2.npy", y2)
 
 
-def plot_prediction(test_data, yhat, truth, start=0, end=None):
+def plot_prediction(test_data, yhat, truth, columns, start=0, end=None):
     if end is None:
         end = len(yhat)
 
@@ -29,11 +29,13 @@ def plot_prediction(test_data, yhat, truth, start=0, end=None):
     if test_data is not None:
         pass
     plt.plot(yhat, label='prediction', linestyle='-.', alpha=.7, color='r')
-    #plt.plot(yhat[start:end,  1], label='lower', linestyle='--', alpha=.6, color='r')
-    #plt.plot(yhat[start:end,  2], label='upper', linestyle='--', alpha=.6, color='r')
+    # plt.plot(yhat[start:end,  1], label='lower', linestyle='--', alpha=.6, color='r')
+    # plt.plot(yhat[start:end,  2], label='upper', linestyle='--', alpha=.6, color='r')
     plt.plot(truth, label='actual', linestyle='-', alpha=.5, color='b')
-    #plt.plot(truth[start:end, 1], label='actual lower', linestyle=':', alpha=.4, color='b')
-    #plt.plot(truth[start:end, 2], label='actual upper', linestyle=':', alpha=.4, color='b')
+    # plt.plot(truth[start:end, 1], label='actual lower', linestyle=':', alpha=.4, color='b')
+    # plt.plot(truth[start:end, 2], label='actual upper', linestyle=':', alpha=.4, color='b')
+    for i in columns:
+        plt.axvline(x=i, linestyle='--', alpha=.3, color='g')
 
     # fill with color
     # plt.fill_between(
@@ -68,10 +70,9 @@ def plot_history(history):
         plt.title('model ' + key)
         plt.ylabel(key)
         plt.xlabel('epoch')
-        plt.legend(loc='upper left')
-        plt.savefig(pm.LOG_FOLDER + "/" + key + ".png")
+        plt.legend(['train', 'test'], loc='upper left')
+        plt.savefig(pm.LOG_FOLDER + "/" + key.replace("val_", "") + ".png")
         plt.close()
-
 
     # New plot. We plot y as a line, while for the predictions,
     # each data point is an estimate for the subsequent pm.YWINDOW data points.

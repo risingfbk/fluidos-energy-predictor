@@ -1,12 +1,23 @@
 import json
+import os
 
 import numpy as np
+from matplotlib import pyplot as plt
 from sklearn.preprocessing import MinMaxScaler
 
+import src.secret_parameters as pms
+
 if __name__ == "__main__":
+    name_start = pms.PARSED_FILE
+    name_target = name_start.replace(".json", "").replace("_sorted", "")
+    folder_start = "data/json"
+    folder_target = f"data/{name_target}"
+
+    os.makedirs(folder_target, exist_ok=True)
+
     newdata = np.array([])
     newdata = newdata.reshape(0, 5)
-    with open('data/data.json') as f:
+    with open(f'{folder_start}/{name_start}') as f:
         data = json.load(f)
         i = 0
         for item in data:
@@ -61,9 +72,8 @@ if __name__ == "__main__":
     newdata[:, 3] = scaler.fit_transform(newdata[:, 3].reshape(-1, 1)).reshape(-1)
     newdata[:, 4] = scaler.fit_transform(newdata[:, 4].reshape(-1, 1)).reshape(-1)
 
-    global_mid = int(newdata[0][2])
     # split into
-    with open(f'data/{global_mid}_all.csv', 'w') as f:
+    with open(f'{folder_target}/{name_target}_all.csv', 'w') as f:
         f.write("timestamp,empty1,empty2,machine_id,cpu,mem,empty3\n")
         i = 1
         for item in newdata:
@@ -73,21 +83,25 @@ if __name__ == "__main__":
 
     # split into pieces of three days
     for i in range(0, len(newdata), 3 * 288):
-        with open(f'data/{global_mid}_{i//3}.csv', 'w') as f:
+        day_start = i // 288
+        day_end = (i + 3 * 288) // 288 - 1
+        print(f"Splitting from t={day_start} to t={day_end}")
+        with open(f'{folder_target}/{name_target}_days_{day_start}-to-{day_end}.csv', 'w') as f:
             f.write("timestamp,empty1,empty2,machine_id,cpu,mem,empty3\n")
             j = 1
-            for item in newdata[i:i+3*288]:
+            for item in newdata[i:i + 3 * 288]:
                 start, end, mid, cpu, mem = item
                 f.write(f"{j},,,{mid},{cpu},{mem},{start},{end}\n")
                 j += 1
 
+    os.makedirs(f"{folder_target}/plot", exist_ok=True)
 
     # plot a day at a time
-    # for i in range(0, len(newdata), 12 * 24):
-    #     dd = newdata[i:i+12*24]
-    #     x = [item[0] for item in dd]
-    #     y = [item[4] for item in dd]
-    #     plt.figure(figsize=(30, 10))
-    #     plt.plot(x, y)
-    #     plt.savefig(f"data/plot{i}.png")
-    #     plt.close()
+    for i in range(0, len(newdata), 12 * 24):
+        dd = newdata[i:i + 12 * 24]
+        x = [item[0] for item in dd]
+        y = [item[4] for item in dd]
+        plt.figure(figsize=(30, 10))
+        plt.plot(x, y)
+        plt.savefig(f"{folder_target}/plot/{name_target}_plot_day_{i // (12 * 24)}.png")
+        plt.close()

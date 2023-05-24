@@ -76,7 +76,7 @@ def split_sequence(sequence, n_steps_in, n_steps_out, ywindow, filename):
     xx, y = [], []
     seq_filename = pm.DATA_DIR + '/' + \
                    'samples_' + ",".join(
-        [str(a) for a in [n_steps_in, n_steps_out, ywindow, ''.join(filename.split(".")[:-1]), len(sequence)]])
+        [str(a) for a in [n_steps_in, n_steps_out, ywindow, filename, len(sequence)]])
 
     if os.path.exists(seq_filename + '.npy'):
         log.info(f"Using cached sequences for {seq_filename}...")
@@ -132,7 +132,8 @@ def obtain_vectors(data_file: str | list[str], mode: str, keep_scaler: bool = Fa
     scaler = scaler.fit(dataset.reshape(-1, 1))
     dataset = trans_forward(scaler, dataset)
 
-    xx, y = split_sequence(dataset, pm.STEPS_IN, pm.STEPS_OUT, pm.YWINDOW, data_file)
+    simple_filename = "".join(data_file.split('/')[-1].split('.')[:-1])
+    xx, y = split_sequence(dataset, pm.STEPS_IN, pm.STEPS_OUT, pm.YWINDOW, simple_filename)
     # if pm.N_FEATURES > 1:
     xx = xx.reshape((xx.shape[0], xx.shape[1], pm.N_FEATURES))
     log.debug("Working with", xx.shape, " ", y.shape, "samples")

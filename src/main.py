@@ -6,10 +6,11 @@ from datetime import datetime
 import numpy as np
 import tensorflow as tf
 from keras.layers import LSTM
+from sklearn.metrics import r2_score, mean_squared_error
 
 import src.parameters as pm
 import src.secret_parameters as pms
-from src.data import obtain_vectors, trans_back
+from src.data import obtain_vectors
 from src.log import initialize_log, tqdm_wrapper
 from src.plot import plot_prediction, plot_history, save_prediction
 
@@ -43,6 +44,7 @@ def predict(model: tf.keras.Sequential, test_data: list[str]):
     y2 = y2[:__min]
 
     yhat_history = []
+    columns = []
 
     # predict every pm.STEPS_OUT steps
     for i in tqdm_wrapper(range(0, __min, pm.STEPS_OUT)):
@@ -50,23 +52,18 @@ def predict(model: tf.keras.Sequential, test_data: list[str]):
         x_input = x_input.reshape((1, pm.STEPS_IN, pm.N_FEATURES))
         yhat = model.predict(x_input, verbose=0)
         yhat_history.append(yhat)
+        columns.append(i)
 
     yhat_history = np.array(yhat_history).flatten()
 
     save_prediction(yhat_history, y2)
-    plot_prediction(test_data, yhat_history, y2)
+    plot_prediction(test_data, yhat_history, y2, columns)
 
-    # Calculate R2 score, TP, FP, TN, FN
-    from sklearn.metrics import r2_score, f1_score, mean_squared_error
     r2 = r2_score(y2, yhat_history)
-    #f1 = f1_score(y2, yhat_history, average="macro")
     mse = mean_squared_error(y2, yhat_history)
-    log.info(f"R2 score: {r2}")
-    #log.info(f"F1 score: {f1}")
-    log.info(f"MSE: {mse}")
-    # calc sample standard deviation
-    std = np.std(y2)
-
+    # Calculate standard deviation as a measure of accuracy
+    # for each data point, the prediction is within 1 std of the actual value
+    std = np.std(yhat_history - y2)
 
     yes = 0
     no = 0
@@ -76,10 +73,15 @@ def predict(model: tf.keras.Sequential, test_data: list[str]):
             yes += 1
         else:
             no += 1
-    log.info(f"Correct: {yes}")
-    log.info(f"Incorrect: {no}")
-    log.info(f"Accuracy: {yes / (yes + no)}")
 
+    return {
+        "r2": r2,
+        "mse": mse,
+        "std": std,
+        "yes": yes,
+        "no": no,
+        "accuracy": yes / (yes + no)
+    }
 
 
 def main():
@@ -148,7 +150,6 @@ def main():
         if len(chosen) > 0:
             raise EnvironmentError(f"Something went wrong. {len(chosen)} files were not used.")
 
-
     if len(train_data) == 0 or len(test_data) == 0:
         raise EnvironmentError(
             "Something went wrong. You need to specify at least one file for training and one for testing.")
@@ -164,7 +165,7 @@ def main():
     models = sorted([
         i.split(".")[0] \
         for i in os.listdir(pm.MODEL_DIR) \
-        if os.path.isfile(pm.MODEL_DIR + "/" + i + "/" + i + ".h5")
+        if os.path.isfile(pm.MODEL_DIR + "/" + i + "/model.h5")
     ])
     while True:
         print("---")
@@ -191,7 +192,7 @@ def main():
                     pass
 
         print(f"Chosen model name: {name}")
-        if os.path.exists(pm.MODEL_DIR + "/" + name + "/" + name + ".h5"):
+        if os.path.exists(pm.MODEL_DIR + "/" + name + "/model.h5"):
             break
         else:
             print("Model not found. Would you like to train it as a new model?")
@@ -226,7 +227,7 @@ def main():
 
     # Load model eventually
     if not new_model:
-        model = tf.keras.models.load_model(pm.MODEL_DIR + "/" + name + ".h5")
+        model = tf.keras.models.load_model(pm.MODEL_DIR + "/model.h5")
     else:
         model = obtain_model()
 
@@ -255,19 +256,20 @@ def main():
 
         cb = [tf.keras.callbacks.EarlyStopping(monitor='val_loss', patience=pm.PATIENCE),
               tf.keras.callbacks.BackupAndRestore(pm.MODEL_DIR + "/backup"),
-              tf.keras.callbacks.ModelCheckpoint(pm.MODEL_DIR + "/" + name + "_chk.h5",
+              tf.keras.callbacks.ModelCheckpoint(pm.MODEL_DIR + "/model_chk.h5",
                                                  save_best_only=True)]
 
         log.info(f"Training model for {epochs} epochs")
         history = model.fit(xx, y, epochs=epochs, verbose=1, validation_split=pm.SPLIT, shuffle=True,
                             callbacks=cb)
 
-        tf.keras.models.save_model(model, pm.MODEL_DIR + "/" + name + ".h5")
+        tf.keras.models.save_model(model, pm.MODEL_DIR + "/model.h5")
         log.info("Saved model to disk")
         plot_history(history)
 
     # Predict
-    predict(model, test_data)
+    results = predict(model, test_data)
+    log.info("Predictions: " + str(results))
 
 
 if __name__ == '__main__':
