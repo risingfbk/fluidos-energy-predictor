@@ -13,8 +13,6 @@ def save_prediction(yhat, y2):
     # Dump the prediction to a file
     os.makedirs(pm.LOG_FOLDER + "/pred", exist_ok=True)
     np.savetxt(pm.LOG_FOLDER + "/pred/prediction.csv", yhat, delimiter=",")
-    # np.savetxt(pm.LOG_FOLDER + "/pred/lower.csv", yhat[:,  1], delimiter=",")
-    # np.savetxt(pm.LOG_FOLDER + "/pred/upper.csv", yhat[:, 2], delimiter=",")
     np.savetxt(pm.LOG_FOLDER + "/pred/actual.csv", y2, delimiter=",")
     np.save(pm.LOG_FOLDER + "/pred/yhat_history.npy", yhat)
     np.save(pm.LOG_FOLDER + "/pred/y2.npy", y2)
@@ -29,11 +27,7 @@ def plot_prediction(test_data, yhat, truth, columns, start=0, end=None):
     if test_data is not None:
         pass
     plt.plot(yhat, label='prediction', linestyle='-.', alpha=.7, color='r')
-    # plt.plot(yhat[start:end,  1], label='lower', linestyle='--', alpha=.6, color='r')
-    # plt.plot(yhat[start:end,  2], label='upper', linestyle='--', alpha=.6, color='r')
     plt.plot(truth, label='actual', linestyle='-', alpha=.5, color='b')
-    # plt.plot(truth[start:end, 1], label='actual lower', linestyle=':', alpha=.4, color='b')
-    # plt.plot(truth[start:end, 2], label='actual upper', linestyle=':', alpha=.4, color='b')
     for i in columns:
         plt.axvline(x=i, linestyle='--', alpha=.3, color='g')
 

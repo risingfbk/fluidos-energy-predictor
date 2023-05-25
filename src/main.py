@@ -3,96 +3,26 @@ import os
 import random
 from datetime import datetime
 
-import numpy as np
 import tensorflow as tf
-from keras.layers import LSTM
-from sklearn.metrics import r2_score, mean_squared_error
 
 import src.parameters as pm
 import src.secret_parameters as pms
+import src.model as modelmd
 from src.data import obtain_vectors
-from src.log import initialize_log, tqdm_wrapper
-from src.plot import plot_prediction, plot_history, save_prediction
-
-
-def obtain_model() -> tf.keras.Sequential:
-    # opt = tf.keras.optimizers.Adagrad(learning_rate=pm.LEARNING_RATE)
-    # loss = tf.keras.losses.BinaryCrossentropy(from_logits=True)
-    opt = tf.keras.optimizers.Adam(learning_rate=pm.LEARNING_RATE)
-    loss = tf.keras.losses.MeanSquaredError()
-
-    accuracy = [tf.keras.metrics.RootMeanSquaredError()]
-
-    model = tf.keras.Sequential()
-    model.add(LSTM(pm.UNITS, return_sequences=True, input_shape=(pm.STEPS_IN, pm.N_FEATURES)))
-    model.add(LSTM(pm.UNITS))
-    # model.add(tf.keras.layers.Dropout(pm.DROPOUT))
-    # model.add(tf.keras.layers.Dense(pm.STEPS_OUT, kernel_initializer='normal', activation='relu'))
-    model.add(tf.keras.layers.Dense(pm.STEPS_OUT))
-
-    model.compile(optimizer=opt, loss=loss, metrics=[accuracy])
-    model.build(input_shape=(pm.STEPS_IN, pm.N_FEATURES))
-
-    return model
-
-
-def predict(model: tf.keras.Sequential, test_data: list[str]):
-    xx2, y2, scaler = obtain_vectors(test_data[0], "test", keep_scaler=True)
-
-    __min = min(len(y2), pm.TEST_SIZE)
-    xx2 = xx2[:__min]
-    y2 = y2[:__min]
-
-    yhat_history = []
-    columns = []
-
-    # predict every pm.STEPS_OUT steps
-    for i in tqdm_wrapper(range(0, __min, pm.STEPS_OUT)):
-        x_input = np.array(xx2[i])
-        x_input = x_input.reshape((1, pm.STEPS_IN, pm.N_FEATURES))
-        yhat = model.predict(x_input, verbose=0)
-        yhat_history.append(yhat)
-        columns.append(i)
-
-    yhat_history = np.array(yhat_history).flatten()
-
-    save_prediction(yhat_history, y2)
-    plot_prediction(test_data, yhat_history, y2, columns)
-
-    r2 = r2_score(y2, yhat_history)
-    mse = mean_squared_error(y2, yhat_history)
-    # Calculate standard deviation as a measure of accuracy
-    # for each data point, the prediction is within 1 std of the actual value
-    std = np.std(yhat_history - y2)
-
-    yes = 0
-    no = 0
-    # for each sample, the sample is correct if the prediction is within 1 std of the actual value
-    for i in range(len(y2)):
-        if abs(yhat_history[i] - y2[i]) <= std:
-            yes += 1
-        else:
-            no += 1
-
-    return {
-        "r2": r2,
-        "mse": mse,
-        "std": std,
-        "yes": yes,
-        "no": no,
-        "accuracy": yes / (yes + no)
-    }
+from src.log import initialize_log
+from src.plot import plot_history
 
 
 def main():
     initialize_log("INFO")
 
     # Block GPU
-    os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
+    # os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
 
     os.makedirs(pm.LOG_FOLDER, exist_ok=True)
     os.makedirs(pm.MODEL_DIR, exist_ok=True)
     os.makedirs(pm.DATA_DIR, exist_ok=True)
+    os.makedirs(pm.CACHE_DIR, exist_ok=True)
 
     banlist = []
     if os.path.exists("banlist"):
@@ -163,19 +93,22 @@ def main():
 
     new_model = False
     models = sorted([
-        i.split(".")[0] \
-        for i in os.listdir(pm.MODEL_DIR) \
-        if os.path.isfile(pm.MODEL_DIR + "/" + i + "/model.h5")
+        i.split(".")[0]
+        for i in os.listdir(pm.MODEL_DIR)
     ])
     while True:
         print("---")
         if len(models) > 0:
             print(f"Available models:")
             for i in range(len(models)):
-                print(f"\t{i + 1}) {models[i]}")
+                model_name = models[i]
+                if os.path.isfile(pm.MODEL_DIR + "/" + model_name + "/model.h5"):
+                    print(f"\t{i + 1}) {model_name} (trained)")
+                else:
+                    print(f"\t{i + 1}) {model_name} (status unknown)")
             print()
         name = input(f"Model name:"
-                     f"\n\t- '' or 'default' for default model ({pm.DEFAULT_MODEL})" + \
+                     f"\n\t- '' or 'default' for default model ({pm.DEFAULT_MODEL})" 
                      f"\n\t- 'dt' for datetime"
                      f"\n\t- [name] for name" + \
                      (f"\n\t- [number] for a specific model in list" if len(models) > 0 else "") + \
@@ -229,7 +162,7 @@ def main():
     if not new_model:
         model = tf.keras.models.load_model(pm.MODEL_DIR + "/model.h5")
     else:
-        model = obtain_model()
+        model = modelmd.new_model()
 
     print(model.summary())
 
@@ -268,7 +201,7 @@ def main():
         plot_history(history)
 
     # Predict
-    results = predict(model, test_data)
+    results = modelmd.predict(model, test_data)
     log.info("Predictions: " + str(results))
 
 

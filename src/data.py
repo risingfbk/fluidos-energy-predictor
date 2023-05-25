@@ -11,11 +11,12 @@ from src.log import tqdm_wrapper
 def load_data(file: str, mode: str) -> tuple[None, np.ndarray]:
     res = []
 
-    file = pm.DATA_DIR + "/" + file
+    npyfile = os.path.join(pm.CACHE_DIR, file.split("/")[-1].replace(".csv", ".npy"))
+    file = os.path.join(pm.DATA_DIR, file)
 
-    if os.path.exists(file + ".npy"):
-        log.info(f"Reading cached data from {file}.npy")
-        return None, np.load(file + ".npy")  # np.load(file + "_ts.npy")
+    if os.path.exists(npyfile):
+        log.info(f"Reading cached data from {npyfile}")
+        return None, np.load(npyfile)
 
     log.info(f"Reading data from {file}")
     with open(file, 'r') as f:
@@ -56,7 +57,7 @@ def load_data(file: str, mode: str) -> tuple[None, np.ndarray]:
     #        new_inputs.append(np.mean(float_inputs[i:i + mv_avg_window]))
 
     float_inputs = np.array(float_inputs)
-    np.save(file + ".npy", float_inputs)
+    np.save(npyfile, float_inputs)
     # np.save(file + "_ts.npy", np.array(ts))
 
     return None, float_inputs
@@ -72,34 +73,39 @@ def trans_back(scaler: MinMaxScaler, arr):
     return out_arr.flatten()
 
 
-def split_sequence(sequence, n_steps_in, n_steps_out, ywindow, filename):
+def split_sequence(sequence, n_steps_in, n_steps_out, filename):
     xx, y = [], []
-    seq_filename = pm.DATA_DIR + '/' + \
-                   'samples_' + ",".join(
-        [str(a) for a in [n_steps_in, n_steps_out, ywindow, filename, len(sequence)]])
 
-    if os.path.exists(seq_filename + '.npy'):
+    simple_filename = filename.split("/")[-1].replace(".csv", "")
+    desc = ",".join([str(a) for a in [n_steps_in, n_steps_out, simple_filename, len(sequence)]])
+
+    seq_filename_npy = pm.CACHE_DIR + '/' + "samples_" + desc + ".npy"
+    seq_filename_y_npy = pm.CACHE_DIR + '/' + "samples_" + desc + "_y.npy"
+    seq_filename = pm.DATA_DIR + '/' + "samples_" + desc
+
+    if os.path.exists(seq_filename_npy) and os.path.exists(seq_filename_y_npy):
         log.info(f"Using cached sequences for {seq_filename}...")
-        return np.load(seq_filename + '.npy'), np.load(seq_filename + '_y.npy')
-
+        return np.load(seq_filename_npy), np.load(seq_filename_y_npy)
+    elif os.path.exists(seq_filename_npy) or os.path.exists(seq_filename_y_npy):
+        raise Exception(f"Only one of {seq_filename_npy} or {seq_filename_y_npy} exists!")
     else:
         log.info(f"Generating sequences for {seq_filename}...")
-        for i in tqdm_wrapper(range(len(sequence) - ywindow - n_steps_in + 1)):
+        for i in tqdm_wrapper(range(len(sequence) - n_steps_out - n_steps_in + 1)):
             # find the end of this pattern
             end_ix = i + n_steps_in
 
             # gather input and output parts of the pattern
             # print(sequence[end_ix:end_ix+ywindow])
             seq_x = sequence[i:end_ix]
-            seq_y = sequence[end_ix:end_ix + ywindow]
+            seq_y = sequence[end_ix:end_ix + n_steps_out]
             # [np.percentile(sequence[end_ix:end_ix + ywindow], pm.LSTM_TARGET),
             #  np.percentile(sequence[end_ix:end_ix + ywindow], pm.LSTM_LOWER),
             #  np.percentile(sequence[end_ix:end_ix + ywindow], pm.LSTM_UPPER)]
             xx.append(seq_x)
             y.append(seq_y)
 
-        np.save(seq_filename + '.npy', np.array(xx))
-        np.save(seq_filename + '_y.npy', np.array(y))
+        np.save(seq_filename_npy, np.array(xx))
+        np.save(seq_filename_y_npy, np.array(y))
 
         return np.array(xx), np.array(y)
 
@@ -132,8 +138,7 @@ def obtain_vectors(data_file: str | list[str], mode: str, keep_scaler: bool = Fa
     scaler = scaler.fit(dataset.reshape(-1, 1))
     dataset = trans_forward(scaler, dataset)
 
-    simple_filename = "".join(data_file.split('/')[-1].split('.')[:-1])
-    xx, y = split_sequence(dataset, pm.STEPS_IN, pm.STEPS_OUT, pm.YWINDOW, simple_filename)
+    xx, y = split_sequence(dataset, pm.STEPS_IN, pm.STEPS_OUT, data_file)
     # if pm.N_FEATURES > 1:
     xx = xx.reshape((xx.shape[0], xx.shape[1], pm.N_FEATURES))
     log.debug("Working with", xx.shape, " ", y.shape, "samples")
