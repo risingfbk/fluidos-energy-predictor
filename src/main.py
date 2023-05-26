@@ -168,22 +168,25 @@ def main():
 
     # Train
     if retrain == "y" or retrain == "t":
-        try:
-            epochs = input("Epochs: ")
-            epochs = float(epochs)
-            if int(epochs) != epochs:
-                log.error("Ah yes, training for a non-integer amount of epochs. That's a good idea.")
-                exit(1)
-            epochs = int(epochs)
-        except ValueError:
-            log.error("Ah yes, training for NaN epochs. That's a good idea.")
-            exit(1)
+        while True:
+            try:
+                epochs = input("Epochs: ")
+                epochs = float(epochs)
+                if int(epochs) != epochs:
+                    log.error("Ah yes, training for a non-integer amount of epochs. That's a good idea.")
+                    continue
+                epochs = int(epochs)
 
-        if epochs <= 0:
-            log.error("Ah yes, training for 0 epochs. That's a good idea. Congratulations, you broke math.")
-            exit(1)
+                if epochs <= 0:
+                    log.error("Ah yes, training for 0 epochs. That's a good idea. Congratulations, you broke math.")
+                    continue
 
-        xx, y, _ = obtain_vectors(train_data, "train")
+                break
+            except ValueError:
+                log.error("Ah yes, training for NaN epochs. That's a good idea.")
+                continue
+
+        xx, y = obtain_vectors(train_data)
 
         log.info(f"Training data shape: {xx.shape} -> {y.shape}")
 

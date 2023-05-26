@@ -18,18 +18,28 @@ def save_prediction(yhat, y2):
     np.save(pm.LOG_FOLDER + "/pred/y2.npy", y2)
 
 
-def plot_prediction(test_data, yhat, truth, columns, start=0, end=None):
+def plot_prediction(test_data, yhat, y2, columns, start=0, end=None):
+    # shape of yhat: (n, steps_out, n_features)
+    # plot a graph for each feature
     if end is None:
-        end = len(yhat)
+        end = yhat.shape[0]
 
-    plt.figure(figsize=(20, 10))
-    # First, plot what was before
-    if test_data is not None:
-        pass
-    plt.plot(yhat, label='prediction', linestyle='-.', alpha=.7, color='r')
-    plt.plot(truth, label='actual', linestyle='-', alpha=.5, color='b')
-    for i in columns:
-        plt.axvline(x=i, linestyle='--', alpha=.3, color='g')
+    features = yhat.shape[2]
+    for i in range(features):
+        prediction = yhat[start:end, :, i].flatten()
+        truth = y2[start:end, :, i].flatten()
+
+        plt.figure(figsize=(20, 10))
+        # First, plot what was before
+        if test_data is not None:
+            pass
+        plt.plot(prediction, label='prediction', linestyle='-.', alpha=.7, color='r')
+        plt.plot(truth, label='actual', linestyle='-', alpha=.5, color='b')
+        for j in columns:
+            plt.axvline(x=j, linestyle='--', alpha=.3, color='g')
+        plt.legend()
+        plt.savefig(pm.LOG_FOLDER + f"/prediction-F{i}-{start}-{end}.png")
+        plt.close()
 
     # fill with color
     # plt.fill_between(
@@ -47,10 +57,6 @@ def plot_prediction(test_data, yhat, truth, columns, start=0, end=None):
     #     color='b',
     #     alpha=.15
     # )
-    plt.legend()
-    plt.savefig(pm.LOG_FOLDER + f"/prediction-{start}-{end}.png")
-
-
 def plot_history(history):
     # list all data in history
     log.info("Available keys: " + str(history.history.keys()))
@@ -61,10 +67,11 @@ def plot_history(history):
         plt.figure(figsize=(20, 10))
         plt.plot(history.history[key])
         plt.plot(history.history[key.replace("val_", "")])
+        plt.yscale('log')
         plt.title('model ' + key)
         plt.ylabel(key)
         plt.xlabel('epoch')
-        plt.legend(['train', 'test'], loc='upper left')
+        plt.legend(['train', 'validate'], loc='upper left')
         plt.savefig(pm.LOG_FOLDER + "/" + key.replace("val_", "") + ".png")
         plt.close()
 
@@ -95,7 +102,7 @@ def plot_splitter():
     for i in range(0, len(history), 500):
         plot_prediction(history, truth, i, i + 500)
 
-    print("Done!")
+    log.info("Done!")
 
 
 if __name__ == "__main__":

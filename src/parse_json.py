@@ -11,8 +11,8 @@ from src.log import tqdm_wrapper
 if __name__ == "__main__":
     name_start = pms.PARSED_FILE
     name_target = name_start.replace(".json", "").replace("_sorted", "")
-    folder_start = "data/json"
-    folder_target = f"data/{name_target}"
+    folder_start = "data/gcd/json"
+    folder_target = f"data/gcd/{name_target}"
 
     os.makedirs(folder_target, exist_ok=True)
 
