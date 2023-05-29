@@ -18,7 +18,7 @@ def save_prediction(yhat, y2):
     np.save(pm.LOG_FOLDER + "/pred/y2.npy", y2)
 
 
-def plot_prediction(test_data, yhat, y2, columns, start=0, end=None):
+def plot_prediction(yhat, y2, columns, start=0, end=None):
     # shape of yhat: (n, steps_out, n_features)
     # plot a graph for each feature
     if end is None:
@@ -31,12 +31,11 @@ def plot_prediction(test_data, yhat, y2, columns, start=0, end=None):
 
         plt.figure(figsize=(20, 10))
         # First, plot what was before
-        if test_data is not None:
-            pass
         plt.plot(prediction, label='prediction', linestyle='-.', alpha=.7, color='r')
         plt.plot(truth, label='actual', linestyle='-', alpha=.5, color='b')
-        for j in columns:
-            plt.axvline(x=j, linestyle='--', alpha=.3, color='g')
+        if columns is not None:
+            for j in columns:
+                plt.axvline(x=j, linestyle='--', alpha=.3, color='g')
         plt.legend()
         plt.savefig(pm.LOG_FOLDER + f"/prediction-F{i}-{start}-{end}.png")
         plt.close()
@@ -100,7 +99,7 @@ def plot_splitter():
 
     initialize_log("INFO", "plot")
     for i in range(0, len(history), 500):
-        plot_prediction(history, truth, i, i + 500)
+        plot_prediction(history, truth, columns=None, start=i, end=i + 500)
 
     log.info("Done!")
 
