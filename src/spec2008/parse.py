@@ -3,6 +3,7 @@ import os
 import re
 
 import bs4 as bs
+import numpy as np
 import pandas as pd
 import requests as req
 
@@ -40,6 +41,21 @@ def main():
 
     open("data/spec2008/failed.json", "w").write(json.dumps(failed, indent=4))
 
+    # Merge all files
+    os.makedirs("data/spec2008_agg", exist_ok=True)
+
+    for folder in os.listdir("data/spec2008"):
+        if folder == ".DS_Store":
+            continue
+
+        if not os.path.isdir("data/spec2008/" + folder):
+            raise Exception("Skipping file " + folder + " as it is not a folder.")
+
+        if os.path.exists("data/spec2008_agg/" + folder + ".json"):
+            print("Skipping folder " + folder + " as it already exists.")
+            continue
+
+        merge(folder)
 
 def get_pages(url):
     ret = []
@@ -145,3 +161,57 @@ def parse_page(url):
 
 if __name__ == "__main__":
     main()
+
+
+def merge(folder):
+    print("Merging folder " + folder)
+    data = []
+    for file in os.listdir("data/spec2008/" + folder):
+        if not file.endswith(".json"):
+            raise Exception("Skipping file " + file + " as it is not a json file.")
+        data.append(json.load(open("data/spec2008/" + folder + "/" + file, "r")))
+
+    if len(data) == 0:
+        raise Exception("No data found for folder " + folder)
+
+    if len(data) == 1:
+        json.dump(data[0], open("data/spec2008_agg/" + folder + ".json", "w"), indent=4)
+        return
+
+    # Verify that all data is the same, convert to lower case
+    for key in data[0]["cpu"].keys():
+        if type(data[0]["cpu"][key]) == str:
+            target = re.sub(r"[^a-zA-Z0-9]", "-", "-", data[0]["cpu"][key]).replace("--", "-").lower()
+            check = [re.sub(r"[^a-zA-Z0-9]", "-", "-", data[i]["cpu"][key]).replace("--", "-").lower() == target
+                     for i in range(len(data)) if i > 0]
+        else:
+            check = [data[i]["cpu"][key] == data[0]["cpu"][key] for i in range(len(data)) if i > 0]
+
+        if not all(check):
+            raise Exception(f"CPU Data is not the same for folder {folder}: {check} for {key}")
+
+    res = data[0].copy()
+    res["data"] = {
+        "Performance to Power Ratio": np.round([
+            np.mean([data[i]["data"][j]["Performance to Power Ratio"] for i in range(len(data))])
+            for j in range(len(data[0]["data"]))
+        ], 3).tolist(),
+        "Performance/Actual Load": np.round([
+            np.mean([data[i]["data"][j]["Performance/Actual Load"] for i in range(len(data))])
+            for j in range(len(data[0]["data"]))
+        ], 3).tolist(),
+        "Performance/Target Load": [data[0]["data"][i]["Performance/Target Load"]
+                                    for i in range(len(data[0]["data"]))],
+        "Performance/ssj_ops": np.round([
+            np.mean([data[i]["data"][j]["Performance/ssj_ops"] for i in range(len(data))])
+            for j in range(len(data[0]["data"]))
+        ], 3).tolist(),
+        "Power": np.round([
+            np.mean([data[i]["data"][j]["Power"] for i in range(len(data))])
+            for j in range(len(data[0]["data"]))
+        ], 3).tolist(),
+    }
+
+    res["count"] = len(data)
+
+    json.dump(res, open("data/spec2008_agg/" + folder + ".json", "w"), indent=4)
