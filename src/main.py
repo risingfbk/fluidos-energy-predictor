@@ -5,11 +5,11 @@ from datetime import datetime
 
 import tensorflow as tf
 
+import src.model as modelmd
 import src.parameters as pm
 import src.secret_parameters as pms
-import src.model as modelmd
-from src.data import obtain_vectors
-from src.log import initialize_log
+from src.data import obtain_vectors, fetch_datasets
+from src.support.log import initialize_log
 from src.plot import plot_history
 
 
@@ -20,81 +20,16 @@ def main():
     # os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
 
     os.makedirs(pm.LOG_FOLDER, exist_ok=True)
-    os.makedirs(pm.MODEL_DIR, exist_ok=True)
-    os.makedirs(pm.DATA_DIR, exist_ok=True)
-    os.makedirs(pm.CACHE_DIR, exist_ok=True)
+    os.makedirs(pm.MODEL_FOLDER, exist_ok=True)
+    os.makedirs(pm.GCD_FOLDER, exist_ok=True)
+    os.makedirs(pm.CACHE_FOLDER, exist_ok=True)
 
-    banlist = []
-    if os.path.exists("banlist"):
-        with open("banlist", "r") as f:
-            for line in f:
-                banlist.append(line.strip() + ".csv")
-    else:
-        with open("banlist", "w") as f:
-            f.write("")
-
-    files_to_be_chosen = 0
-    if pms.TEST_FILES is not None:
-        log.info("Verifying test files...")
-        test_data = pms.TEST_FILES
-        for file in test_data:
-            if file in banlist:
-                raise EnvironmentError(f"File {file} is banned. Please refrain from using it ever again.")
-            if not os.path.exists(os.path.join(pm.DATA_DIR, file)):
-                raise EnvironmentError(f"File {file} does not exist.")
-    else:
-        log.info("No test files specified. Choosing randomly.")
-        test_data = None
-        files_to_be_chosen += pm.TEST_FILE_AMOUNT
-
-    if pms.TRAIN_FILES is not None:
-        log.info("Verifying train files...")
-        train_data = pms.TRAIN_FILES
-        for file in train_data:
-            if file in banlist:
-                raise EnvironmentError(f"File {file} is banned. Please refrain from using it ever again.")
-            if not os.path.exists(os.path.join(pm.DATA_DIR, file)):
-                raise EnvironmentError(f"File {file} does not exist.")
-    else:
-        log.info("No train files specified. Choosing randomly.")
-        train_data = None
-        files_to_be_chosen += pm.TRAIN_FILE_AMOUNT
-
-    if train_data is None or test_data is None:
-        files = os.listdir(pm.DATA_DIR)
-        files = [x for x in files if x.endswith(".csv")]
-
-        if len(files) < files_to_be_chosen:
-            raise EnvironmentError(f"Insufficient data. You need at least {files_to_be_chosen} files in {pm.DATA_DIR}")
-
-        # Choose files to be used for training and testing
-        chosen = random.sample(files, files_to_be_chosen)
-        if train_data is None:
-            train_data = random.sample(chosen, pm.TRAIN_FILE_AMOUNT)
-            chosen = [x for x in chosen if x not in train_data]
-
-        if test_data is None:
-            test_data = random.sample(chosen, pm.TEST_FILE_AMOUNT)
-            chosen = [x for x in chosen if x not in test_data]
-
-        if len(chosen) > 0:
-            raise EnvironmentError(f"Something went wrong. {len(chosen)} files were not used.")
-
-    if len(train_data) == 0 or len(test_data) == 0:
-        raise EnvironmentError(
-            "Something went wrong. You need to specify at least one file for training and one for testing.")
-
-    for file in test_data + train_data:
-        if file in banlist:
-            raise EnvironmentError(f"File {file} is banned. Please refrain from using it ever again.")
-
-    log.info("Training files: " + str(train_data))
-    log.info("Testing files: " + str(test_data))
+    train_data, test_data = fetch_datasets()
 
     new_model = False
     models = sorted([
         i.split(".")[0]
-        for i in os.listdir(pm.MODEL_DIR)
+        for i in os.listdir(pm.MODEL_FOLDER)
     ])
     while True:
         print("---")
@@ -102,13 +37,13 @@ def main():
             print(f"Available models:")
             for i in range(len(models)):
                 model_name = models[i]
-                if os.path.isfile(pm.MODEL_DIR + "/" + model_name + "/model.h5"):
+                if os.path.isfile(pm.MODEL_FOLDER + "/" + model_name + "/model.h5"):
                     print(f"\t{i + 1}) {model_name} (trained)")
                 else:
                     print(f"\t{i + 1}) {model_name} (status unknown)")
             print()
         name = input(f"Model name:"
-                     f"\n\t- '' or 'default' for default model ({pm.DEFAULT_MODEL})" 
+                     f"\n\t- '' or 'default' for default model ({pm.DEFAULT_MODEL})"
                      f"\n\t- 'dt' for datetime"
                      f"\n\t- [name] for name" + \
                      (f"\n\t- [number] for a specific model in list" if len(models) > 0 else "") + \
@@ -124,50 +59,65 @@ def main():
                 except:
                     pass
 
+        decision = "n"
+
         print(f"Chosen model name: {name}")
-        if os.path.exists(pm.MODEL_DIR + "/" + name + "/model.h5"):
-            break
-        else:
-            print("Model not found. Would you like to train it as a new model?")
+        if os.path.exists(pm.MODEL_FOLDER + "/" + name + "/model.h5"):
+            print("Model found. What would you like to do? [r]etrain / [c]ontinue / [e]xit")
             while True:
-                response = input("y/n: ")
-                if response == "y":
-                    new_model = True
-                    break
-                elif response == "n":
-                    print(
-                        "You supply a non-existent model and then refuse to train a new one. Do you want an applause?")
-                    exit(1)
-                else:
-                    print("Invalid input")
-                    continue
-            break
-
-    while True:
-        if new_model:
-            retrain = "t"
+                response = input("r/c/e: ")
+                match response:
+                    case "r":
+                        decision = "t"
+                        break
+                    case "c":
+                        decision = "n"
+                        break
+                    case "e":
+                        print("Exiting...")
+                        exit(0)
+                    case _:
+                        print("Invalid input")
+                        continue
             break
         else:
-            retrain = input("Retrain? [y/n]: ")
-            if retrain not in ["y", "n"]:
-                print("Invalid input")
-                continue
+            print("Model not found. What would you like to do? [t]rain / [s]earch hyperparameters / [e]xit")
+            while True:
+                response = input("t/s/e: ")
+                match response:
+                    case "t":
+                        decision = "t"
+                        new_model = True
+                        break
+                    case "s":
+                        from hp import search_params
+                        search_params.search_hp(train_data)
+                        exit(0)
+                    case "e":
+                        print("Exiting...")
+                        exit(0)
+                    case _:
+                        print("Invalid input")
+                        continue
             break
 
-    log.info(f"Model name: {name}; Retrain: {retrain}; New model: {new_model}")
-    pm.MODEL_DIR = os.path.join(pm.MODEL_DIR, name)
-    os.makedirs(pm.MODEL_DIR, exist_ok=True)
+    if decision not in ["t", "n"]:
+        raise EnvironmentError("Something went wrong. Decision is not t or n.")
+
+    log.info(f"Model name: {name}; Retrain: {decision}; New model: {new_model}")
+    pm.MODEL_FOLDER = os.path.join(pm.MODEL_FOLDER, name)
+    os.makedirs(pm.MODEL_FOLDER, exist_ok=True)
 
     # Load model eventually
     if not new_model:
-        model = tf.keras.models.load_model(pm.MODEL_DIR + "/model.h5")
+        model = tf.keras.models.load_model(pm.MODEL_FOLDER + "/model.h5")
     else:
         model = modelmd.new_model()
 
     print(model.summary())
 
     # Train
-    if retrain == "y" or retrain == "t":
+    if decision == "t":
         epochs = 0
         while True:
             try:
@@ -194,21 +144,27 @@ def main():
         log.info(f"Training data shape: {xx.shape} -> {y.shape}")
 
         cb = [tf.keras.callbacks.EarlyStopping(monitor='val_loss', patience=pm.PATIENCE),
-              tf.keras.callbacks.BackupAndRestore(pm.MODEL_DIR + "/backup"),
-              tf.keras.callbacks.ModelCheckpoint(pm.MODEL_DIR + "/model_chk.h5",
-                                                 save_best_only=True)]
+              # tf.keras.callbacks.ReduceLROnPlateau(monitor="val_loss", factor=0.5, patience=10, min_lr=0.0001),
+              tf.keras.callbacks.BackupAndRestore(pm.MODEL_FOLDER + "/backup"),
+              tf.keras.callbacks.ModelCheckpoint(pm.MODEL_FOLDER + "/model.h5",
+                                                 save_best_only=True, save_weights_only=False,
+                                                 monitor='val_loss', mode='min')]
 
         log.info(f"Training model for {epochs} epochs")
         history = model.fit(xx, y, epochs=epochs, verbose=1, validation_split=pm.SPLIT, shuffle=True,
                             callbacks=cb)
 
-        tf.keras.models.save_model(model, pm.MODEL_DIR + "/model.h5")
+        tf.keras.models.save_model(model, pm.MODEL_FOLDER + "/last_model.h5")
+
         log.info("Saved model to disk")
         plot_history(history)
 
+        # restore best model
+        model = tf.keras.models.load_model(pm.MODEL_FOLDER + "/model.h5")
+
     # Predict
     results = modelmd.predict(model, test_data)
-    log.info("Predictions: " + str(results))
+    log.info(f"Predictions: {results}")
 
 
 if __name__ == '__main__':

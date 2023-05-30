@@ -7,9 +7,10 @@ import numpy as np
 import pandas as pd
 import requests as req
 
-from src.log import tqdm_wrapper
+from src.support.log import tqdm_wrapper
 
 URL = "https://www.spec.org/power_ssj2008/results/power_ssj2008.html"
+
 
 def main():
     # Get list of all pages
@@ -56,6 +57,7 @@ def main():
             continue
 
         merge(folder)
+
 
 def get_pages(url):
     ret = []

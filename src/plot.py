@@ -6,7 +6,7 @@ from matplotlib import pyplot as plt
 
 from src import parameters as pm
 from src import secret_parameters as pms
-from src.log import initialize_log
+from src.support.log import initialize_log
 
 
 def save_prediction(yhat, y2):
@@ -24,21 +24,19 @@ def plot_prediction(yhat, y2, columns, start=0, end=None):
     if end is None:
         end = yhat.shape[0]
 
-    features = yhat.shape[2]
-    for i in range(features):
-        prediction = yhat[start:end, :, i].flatten()
-        truth = y2[start:end, :, i].flatten()
+    prediction = yhat[start:end, :].flatten()
+    truth = y2[start:end, :].flatten()
 
-        plt.figure(figsize=(20, 10))
-        # First, plot what was before
-        plt.plot(prediction, label='prediction', linestyle='-.', alpha=.7, color='r')
-        plt.plot(truth, label='actual', linestyle='-', alpha=.5, color='b')
-        if columns is not None:
-            for j in columns:
-                plt.axvline(x=j, linestyle='--', alpha=.3, color='g')
-        plt.legend()
-        plt.savefig(pm.LOG_FOLDER + f"/prediction-F{i}-{start}-{end}.png")
-        plt.close()
+    plt.figure(figsize=(20, 10))
+    # First, plot what was before
+    plt.plot(prediction, label='prediction', linestyle='-.', alpha=.7, color='r')
+    plt.plot(truth, label='actual', linestyle='-', alpha=.5, color='b')
+    if columns is not None:
+        for j in columns:
+            plt.axvline(x=j, linestyle='--', alpha=.3, color='g')
+    plt.legend()
+    plt.savefig(pm.LOG_FOLDER + f"/prediction-{start}-{end}.png")
+    plt.close()
 
     # fill with color
     # plt.fill_between(
@@ -56,6 +54,8 @@ def plot_prediction(yhat, y2, columns, start=0, end=None):
     #     color='b',
     #     alpha=.15
     # )
+
+
 def plot_history(history):
     # list all data in history
     log.info("Available keys: " + str(history.history.keys()))

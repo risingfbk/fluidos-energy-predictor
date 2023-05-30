@@ -5,62 +5,102 @@ import numpy as np
 from matplotlib import pyplot as plt
 from sklearn.preprocessing import MinMaxScaler
 
-import src.secret_parameters as pms
-from src.log import tqdm_wrapper
+import src.parameters as pm
+import src.support.dt as dt
+from src.support.log import tqdm_wrapper
 
 if __name__ == "__main__":
-    name_start = pms.PARSED_FILE
+    granularity = pm.GRANULARITY
+    offset = pm.OFFSET
+    gcd_folder = pm.GCD_FOLDER
+
+    folder_start = f"{gcd_folder}/json"
+
+    av = os.listdir(folder_start)
+    av.sort()
+    for i in range(len(av)):
+        print(f"\t{i}: {av[i]}")
+
+    try:
+        name_start = av[int(input("Select file to parse: "))]
+    except ValueError | IndexError:
+        print("Invalid input, exiting...")
+        exit(1)
+
     name_target = name_start.replace(".json", "").replace("_sorted", "")
-    folder_start = "data/gcd/json"
-    folder_target = f"data/gcd/{name_target}"
+    folder_target = f"{gcd_folder}/{name_target}"
 
     os.makedirs(folder_target, exist_ok=True)
 
-    print("Reading data from ", folder_start, name_start)
+    labels = ['start_time', 'end_time', 'machine_id', 'cpus', 'memory']
+
     newdata = np.array([])
-    newdata = newdata.reshape(0, 5)
+    newdata = newdata.reshape(0, len(labels))
     with open(f'{folder_start}/{name_start}') as f:
         data = json.load(f)
+        if len(data) == 0:
+            print("No data in file, exiting...")
+            exit(1)
+        elif len(data) == 1:
+            data = data[0]
+
         i = 0
         total_items = len(data)
+
+        data = sorted(
+            data,
+            key=lambda q: int(q['start_time'])
+        )
+
+        print(f"Reading data from {folder_start}/{name_start}")
+
         for item in tqdm_wrapper(data):
             start = int(item['start_time'])
             end = int(item['end_time'])
 
             if len(newdata) > 1 and (
-                    start == end or start == newdata[-1][0] or end == newdata[-1][1]
-                ):
+                    start == end  # same time
+                    or end < start  # end before start
+                    or start == newdata[-1][0]  # same start time as previous
+                    or end == newdata[-1][1]  # same end time as previous
+            ):
                 continue
 
             mid = int(item['machine_id'])
-            cpu = float(item['random_sample_usage']['cpus'])
-            mem = float(item['average_usage']['memory'])
+            if "random_sample_usage" in item:
+                cpu = float(item['random_sample_usage']['cpus'])
+            else:
+                cpu = float(item['cpus'])
+
+            if "average_usage" in item:
+                mem = float(item['average_usage']['memory'])
+            else:
+                mem = float(item['memory'])
             # make newdata an array of arrays
             newdata = np.append(newdata, np.array([[start, end, mid, cpu, mem]]), axis=0)
 
     # print(newdata)
     print("Length of newdata:", len(newdata))
-    print("Each data point is 30 sec. Total time: ", len(newdata) * 30 / 60 / 60 / 24, "days")
+    print(f"Each data point is 30 sec. Total time: {len(newdata) / 2 / dt.WEEK_IN_MINUTES} weeks")
 
-    # Merge data points so that it becomes one every 5 minutes
-    # each data point is the average of 10 data points
+    # Merge data points so that it becomes one every MINUTES minutes
     newnewdata = np.array([])
     newnewdata = newnewdata.reshape(0, 5)
-    for i in tqdm_wrapper(range(0, len(newdata), 10)):
-        if i + 10 > len(newdata):
+    for i in tqdm_wrapper(range(0, len(newdata), granularity * 2)):
+        if i + granularity * 2 > len(newdata):
             break
         start, end, mid, cpu, mem = newdata[i]
-        for j in range(1, 10):
+        for j in range(1, granularity * 2):
             _, _, _, cpu_, mem_ = newdata[i + j]
             cpu += cpu_
             mem += mem_
-        cpu /= 10
-        mem /= 10
+        cpu /= granularity * 2
+        mem /= granularity * 2
         newnewdata = np.append(newnewdata, np.array([[start, end, mid, cpu, mem]]), axis=0)
     newdata = newnewdata
 
     print("Length of newdata:", len(newdata))
-    print("Each data point is 5 min. Total time: ", len(newdata) * 5 / 60 / 24, "days")
+    print(f"Each data point is {granularity} min. Total time: {len(newdata) * granularity / dt.WEEK_IN_MINUTES} weeks")
 
     print("Computing moving average...")
 
@@ -94,17 +134,16 @@ if __name__ == "__main__":
             f.write(f"{i},,,{mid},{cpu},{mem},{start},{end}\n")
             i += 1
 
-    print("Splitting data into days...")
-
-    # split into pieces of three days
-    for i in tqdm_wrapper(range(0, len(newdata), 3 * 288)):
-        day_start = i // 288
-        day_end = (i + 3 * 288) // 288 - 1
-        print(f"Splitting from t={day_start} to t={day_end}")
-        with open(f'{folder_target}/{name_target}_days_{day_start}-to-{day_end}.csv', 'w') as f:
+    # split into sequences of 8 days which overlap by 1 day
+    interval = dt.DAY_IN_MINUTES // granularity
+    days = 8
+    for i in tqdm_wrapper(range(0, len(newdata), interval)):
+        target = i + days * interval
+        print(f"Splitting from t={i} to t={target}")
+        with open(f'{folder_target}/{name_target}_seq_{i}-to-{target}.csv', 'w') as f:
             f.write("timestamp,empty1,empty2,machine_id,cpu,mem,empty3\n")
             j = 1
-            for item in newdata[i:i + 3 * 288]:
+            for item in newdata[i:target]:
                 start, end, mid, cpu, mem = item
                 f.write(f"{j},,,{mid},{cpu},{mem},{start},{end}\n")
                 j += 1
@@ -112,12 +151,13 @@ if __name__ == "__main__":
     os.makedirs(f"{folder_target}/plot", exist_ok=True)
 
     print("Plotting data...")
-    # plot a day at a time
-    for i in tqdm_wrapper(range(0, len(newdata), 12 * 24)):
-        dd = newdata[i:i + 12 * 24]
+    # plot a week at time
+    interval = dt.WEEK_IN_MINUTES // granularity
+    for i in tqdm_wrapper(range(0, len(newdata), interval)):
+        dd = newdata[i:i + interval]
         x = [item[0] for item in dd]
         y = [item[4] for item in dd]
         plt.figure(figsize=(30, 10))
         plt.plot(x, y)
-        plt.savefig(f"{folder_target}/plot/{name_target}_plot_day_{i // (12 * 24)}.png")
+        plt.savefig(f"{folder_target}/plot/{name_target}_plot_week_{i // interval}.png")
         plt.close()

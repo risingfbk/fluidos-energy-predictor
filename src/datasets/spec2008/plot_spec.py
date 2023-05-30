@@ -1,9 +1,9 @@
+import json
 import os
-import re
-import seaborn as sns
+
 import matplotlib.pyplot as plt
 import pandas as pd
-import json
+import seaborn as sns
 
 
 # {
@@ -30,7 +30,6 @@ import json
 #         {
 
 
-
 def main():
     files = os.listdir("data/spec2008_agg")
 
@@ -51,7 +50,6 @@ def main():
             # plot x = performance/target load, y = power
             sns.lineplot(x="Performance/Target Load", y="Power", data=df, ax=ax,
                          label=f["pc_model"], alpha=0.1, color="blue")
-
 
     ax.set_xlabel("Performance/Target Load")
     ax.set_ylabel("Power (W)")

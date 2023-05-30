@@ -1,30 +1,32 @@
-## 5760
+# Dataset parameters
+# Span of a single step in minutes
+from src.support.dt import WEEK_IN_MINUTES
 
-STEPS_IN = 144
-STEPS_OUT = 12
+GRANULARITY = 15
+# Offset in minutes between each file
+OFFSET = 24 * 60
+
+STEPS_IN = WEEK_IN_MINUTES // GRANULARITY
+STEPS_OUT = 1
 N_FEATURES = 2
-UNITS = 72
 SPLIT = 0.2
 
-TRAIN_SIZE = 10000000
-TEST_SIZE = 300
+FILTERS = 144
+KSIZE = 3
 
-# LSTM_TARGET = 90
-# LSTM_UPPER = 98
-# LSTM_LOWER = 60
+OVERHEAD = 1.05
 
 DROPOUT = 0
-PATIENCE = 15
+PATIENCE = 100
 
-LEARNING_RATE = 0.0001
-# SMOOTH_WINDOW = 6
-# SMOOTH_RUNS = 1
+LEARNING_RATE = 0.01
 
 LOG_FOLDER = "out"
 
 DEFAULT_MODEL = "model1"
-MODEL_DIR = "models"
-DATA_DIR = "data/gcd"
-CACHE_DIR = "data/cache"
-TEST_FILE_AMOUNT = 1
-TRAIN_FILE_AMOUNT = 1
+MODEL_FOLDER = "models"
+GCD_FOLDER = "data/gcd"
+CACHE_FOLDER = "data/cache"
+
+TEST_FILE_AMOUNT = 24
+TRAIN_FILE_AMOUNT = 24
