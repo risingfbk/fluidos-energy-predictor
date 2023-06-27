@@ -1,3 +1,4 @@
+import json
 import logging as log
 import os
 import random
@@ -7,6 +8,48 @@ import numpy as np
 from src.support import dt
 from src import parameters as pm
 from src.support.log import tqdm_wrapper
+
+
+
+def fetch_power_curve(file: str) -> list[np.ndarray]:
+    spec_folder = pm.SPEC_FOLDER
+
+    if os.path.exists(f"{spec_folder}/.DS_Store"):
+        os.remove(f"{spec_folder}/.DS_Store")
+
+    if file is None or file == "":
+        available_files = [i for i in os.listdir(spec_folder) if "json" in i]
+        if len(available_files) == 0:
+            raise FileNotFoundError(f"No files found in {spec_folder}")
+        file = random.choice(available_files)
+
+    if not file.endswith(".json"):
+        file = f"{file}.json"
+
+    if os.path.exists(f"{spec_folder}/{file}"):
+        with open(f"{spec_folder}/{file}", "r") as f:
+            data = json.load(f)
+            cpu_data = data["data"]["Power"]
+            cpu_data.append(cpu_data[-1] / 2)
+            cpu_data = cpu_data[::-1]
+            cpu_data = np.array(cpu_data)
+
+            mem_data = [0, 0.1, 0.2, 0.4, 0.8, 1.6, 2.4, 3.2, 4.8, 9.6, 18.4]
+            mem_data = np.array(mem_data)
+
+            installed_memory = data["memory"]
+            mem_data *= installed_memory / 8
+
+            if len(cpu_data) != len(mem_data):
+                raise ValueError("CPU and memory data have different lengths")
+            if len(cpu_data) != 11:
+                raise ValueError("CPU and memory data have unexpected length, must be 11")
+
+            log.info(f"Loaded power curve from {file}.json; using {cpu_data} for CPU and {mem_data} for memory")
+            return [cpu_data, mem_data]
+    else:
+        raise FileNotFoundError(f"File {file}.json not found in {spec_folder}")
+
 
 
 def fetch_datasets():
@@ -25,6 +68,8 @@ def fetch_datasets():
         os.remove(f"{gcd_folder}/.DS_Store")
 
     available_folders = [i for i in os.listdir(gcd_folder) if "json" not in i and "npy" not in i and "cache" not in i]
+    if len(available_folders) == 0:
+        raise EnvironmentError(f"No folders found in {gcd_folder}. Please run obtain some datasets first.")
     chosen_folder = random.choices(available_folders, k=1)[0]
 
     files = [i for i in os.listdir(os.path.join(f"{gcd_folder}", chosen_folder)) if "seq" in i]
@@ -126,22 +171,25 @@ def load_data(file: str) -> tuple[np.ndarray, np.ndarray]:
 #     return scaler.inverse_transform(arr)
 
 
-def get_power_from_sequence(param):
-    # watts
-    cpu_mappings = [32.0, 64.3, 76.9, 90.5, 107.0, 122.0, 140.0, 160.0, 186.0, 214.0, 235.0]
-    mem_mappings = [0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.1, 2.0, 4.0, 6.0, 8.0]
+def get_predicted_power(param: np.ndarray, power_curve: list[np.ndarray]) -> float:
+    cpu_curve, mem_curve = power_curve
 
     cpu_usage = param[:, 0]
     mem_usage = param[:, 1]
 
     # transform average power over 5 minutes to actual consumption (Wh)
-    cpu_power = np.interp(cpu_usage, np.arange(len(cpu_mappings)), cpu_mappings) * pm.GRANULARITY / 60
-    mem_power = np.interp(mem_usage, np.arange(len(mem_mappings)), mem_mappings) * pm.GRANULARITY / 60
+    cpu_power = np.interp(cpu_usage, np.arange(len(cpu_curve)), cpu_curve) * pm.GRANULARITY / 60
+    mem_power = np.interp(mem_usage, np.arange(len(mem_curve)), mem_curve) * pm.GRANULARITY / 60
 
     return np.sum(cpu_power + mem_power) * pm.OVERHEAD
 
 
-def split_sequence(sequence, past_len, future_len, steps_out, filename):
+def split_sequence(sequence: np.ndarray,
+                   past_len: int,
+                   future_len: int,
+                   steps_out: int,
+                   filename: str,
+                   power_curve: list[np.ndarray]) -> tuple[np.ndarray | None, np.ndarray | None]:
     # split the sequence into samples s.t.
     # X = [past_len, N_FEATURES]
     # y = [steps_out, 1]
@@ -173,7 +221,7 @@ def split_sequence(sequence, past_len, future_len, steps_out, filename):
             end_ix = i + past_len
 
             seq_x = sequence[i:end_ix]
-            seq_y = get_power_from_sequence(sequence[end_ix:end_ix + future_len])
+            seq_y = get_predicted_power(sequence[end_ix:end_ix + future_len], power_curve)
 
             xx[i] = seq_x
             y[i] = seq_y
@@ -184,11 +232,12 @@ def split_sequence(sequence, past_len, future_len, steps_out, filename):
         return xx, y
 
 
-def obtain_vectors(data_file: str | list[str]) -> (np.ndarray, np.ndarray):
+def obtain_vectors(data_file: str | list[str],
+                   power_curve: list[np.ndarray]) -> tuple[np.ndarray | None, np.ndarray | None]:
     if isinstance(data_file, list):
         xx, y = np.ndarray(shape=(0, pm.STEPS_IN, pm.N_FEATURES)), np.ndarray(shape=(0, pm.STEPS_OUT))
         for file in data_file:
-            xx_, y_ = obtain_vectors(file)
+            xx_, y_ = obtain_vectors(file, power_curve)
             if xx_ is None or y_ is None:
                 continue
             xx = np.concatenate((xx, xx_), axis=0)
@@ -204,8 +253,12 @@ def obtain_vectors(data_file: str | list[str]) -> (np.ndarray, np.ndarray):
         dataset = dataset.reshape(-1, 1)
 
     future_len = pm.STEPS_IN // dt.WEEK_IN_DAYS
-    xx, y = split_sequence(sequence=dataset, past_len=pm.STEPS_IN, future_len=future_len, steps_out=pm.STEPS_OUT,
-                           filename=data_file)
+    xx, y = split_sequence(sequence=dataset,
+                           past_len=pm.STEPS_IN,
+                           future_len=future_len,
+                           steps_out=pm.STEPS_OUT,
+                           filename=data_file,
+                           power_curve=power_curve)
     # log.debug("Working with", xx.shape, " ", y.shape, "samples")
 
     return xx, y

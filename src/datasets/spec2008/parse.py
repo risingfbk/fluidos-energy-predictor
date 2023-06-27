@@ -15,32 +15,36 @@ URL = "https://www.spec.org/power_ssj2008/results/power_ssj2008.html"
 def main():
     # Get list of all pages
     pages = get_pages(URL)
+    redownload = False
+
+    print(f"Found {len(pages)} pages.")
 
     os.makedirs("data/spec2008", exist_ok=True)
     failed = []
 
-    for page in tqdm_wrapper(pages):
-        try:
-            fn = re.sub(r"[^a-zA-Z0-9]", "-", "-".join([str(i) for i in page["cpu"].values()])) \
-                .replace("--", "-") \
-                .lower()
-            if fn[-1] == "-":
-                fn = fn[:-1]
+    if redownload:
+        for page in tqdm_wrapper(pages):
+            try:
+                fn = re.sub(r"[^a-zA-Z0-9]", "-", "-".join([str(i) for i in page["cpu"].values()])) \
+                    .replace("--", "-") \
+                    .lower()
+                if fn[-1] == "-":
+                    fn = fn[:-1]
 
-            page["filename"] = fn
-            os.makedirs(f"data/spec2008/{fn}", exist_ok=True)
-            content = len(os.listdir(f"data/spec2008/{fn}"))
+                page["filename"] = fn
+                os.makedirs(f"data/spec2008/{fn}", exist_ok=True)
+                content = len(os.listdir(f"data/spec2008/{fn}"))
 
-            data = parse_page(page["link"])
-            page["data"] = pd.DataFrame(data).to_dict(orient="records")
-            open(f"data/spec2008/{fn}/{content}.json", "w").write(json.dumps(page, indent=4))
-        except Exception as e:
-            failed.append(page)
-            print("Error parsing page: " + page["pc_model"])
-            print(e)
-            continue
+                data = parse_page(page["link"])
+                page["data"] = pd.DataFrame(data).to_dict(orient="records")
+                open(f"data/spec2008/{fn}/{content}.json", "w").write(json.dumps(page, indent=4))
+            except Exception as e:
+                failed.append(page)
+                print("Error parsing page: " + page["pc_model"])
+                print(e)
+                continue
 
-    open("data/spec2008/failed.json", "w").write(json.dumps(failed, indent=4))
+        open("data/spec2008/failed.json", "w").write(json.dumps(failed, indent=4))
 
     # Merge all files
     os.makedirs("data/spec2008_agg", exist_ok=True)
@@ -50,7 +54,8 @@ def main():
             continue
 
         if not os.path.isdir("data/spec2008/" + folder):
-            raise Exception("Skipping file " + folder + " as it is not a folder.")
+            print("Skipping file " + folder + " as it is not a folder.")
+            continue
 
         if os.path.exists("data/spec2008_agg/" + folder + ".json"):
             print("Skipping folder " + folder + " as it already exists.")
@@ -113,7 +118,7 @@ def get_pages(url):
 
 
 def parse_page(url):
-    print("Parsing page: " + url)
+    # print("...parsing page: " + url)
     r = req.get(url)
     soup = bs.BeautifulSoup(r.text, "html.parser")
     # find div with class=.resultsTable
@@ -161,9 +166,6 @@ def parse_page(url):
     return df
 
 
-if __name__ == "__main__":
-    main()
-
 
 def merge(folder):
     print("Merging folder " + folder)
@@ -174,17 +176,14 @@ def merge(folder):
         data.append(json.load(open("data/spec2008/" + folder + "/" + file, "r")))
 
     if len(data) == 0:
-        raise Exception("No data found for folder " + folder)
-
-    if len(data) == 1:
-        json.dump(data[0], open("data/spec2008_agg/" + folder + ".json", "w"), indent=4)
+        print("No data found for folder " + folder)
         return
 
     # Verify that all data is the same, convert to lower case
     for key in data[0]["cpu"].keys():
         if type(data[0]["cpu"][key]) == str:
-            target = re.sub(r"[^a-zA-Z0-9]", "-", "-", data[0]["cpu"][key]).replace("--", "-").lower()
-            check = [re.sub(r"[^a-zA-Z0-9]", "-", "-", data[i]["cpu"][key]).replace("--", "-").lower() == target
+            target = re.sub(r"[^a-zA-Z0-9]", "-", data[0]["cpu"][key]).replace("--", "-").lower()
+            check = [re.sub(r"[^a-zA-Z0-9]", "-", data[i]["cpu"][key]).replace("--", "-").lower() == target
                      for i in range(len(data)) if i > 0]
         else:
             check = [data[i]["cpu"][key] == data[0]["cpu"][key] for i in range(len(data)) if i > 0]
@@ -217,3 +216,7 @@ def merge(folder):
     res["count"] = len(data)
 
     json.dump(res, open("data/spec2008_agg/" + folder + ".json", "w"), indent=4)
+
+
+if __name__ == "__main__":
+    main()

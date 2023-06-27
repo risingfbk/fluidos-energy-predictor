@@ -5,7 +5,6 @@ import numpy as np
 from matplotlib import pyplot as plt
 
 from src import parameters as pm
-from src import secret_parameters as pms
 from src.support.log import initialize_log
 
 
@@ -64,8 +63,8 @@ def plot_history(history):
         if "val" not in key:
             continue
         plt.figure(figsize=(20, 10))
-        plt.plot(history.history[key])
         plt.plot(history.history[key.replace("val_", "")])
+        plt.plot(history.history[key])
         plt.yscale('log')
         plt.title('model ' + key)
         plt.ylabel(key)
@@ -93,7 +92,7 @@ def plot_history(history):
 
 
 def plot_splitter():
-    file = pms.PLOT_FILE
+    file = input("Enter the folder name: ")
     history = np.load(file + "/pred/yhat_history.npy")
     truth = np.load(file + "/pred/y2.npy")
 

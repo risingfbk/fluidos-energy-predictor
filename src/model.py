@@ -10,8 +10,8 @@ from src.data import obtain_vectors
 from src.plot import save_prediction, plot_prediction
 
 
-def custom_loss(y_true, y_pred):
-    return tf.keras.losses.MSE(y_true, y_pred)
+# def custom_loss(y_true, y_pred):
+#     return tf.keras.losses.MSE(y_true, y_pred)
 
 
 def new_model(hp: kt.HyperParameters = None) -> tf.keras.models.Model:
@@ -50,11 +50,13 @@ def new_model(hp: kt.HyperParameters = None) -> tf.keras.models.Model:
     return model
 
 
-def predict(model: tf.keras.Sequential, test_data: list[str]):
+def predict(model: tf.keras.Sequential,
+            test_data: list[str],
+            power_curve: list[np.ndarray]) -> dict:
     yhat_history = np.ndarray(shape=(0, pm.STEPS_OUT))
     y2_history = np.ndarray(shape=(0, pm.STEPS_OUT))
     for file in test_data:
-        xx2, y2 = obtain_vectors(file)
+        xx2, y2 = obtain_vectors(file, power_curve)
         if xx2 is None or y2 is None:
             continue
 
