@@ -3,7 +3,7 @@ version: "3"
 services:
   predictor:
     container_name: predictor
-    image: ghcr.io/risingfbk/fluidos-predictor:latest
+    image: ghcr.io/risingfbk/fluidos-energy-predictor:github
     user: 1000:1000
     volumes:
       - /path/to/data/folder:/app/data
