@@ -4,6 +4,7 @@ out
 banlist
 .idea
 secret_parameters.py
+docker-compose.yml
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
