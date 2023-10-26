@@ -40,7 +40,7 @@ def ask_model_name(models: list[str]) -> str:
                     name = models[int(name) - 1]
                     break
                 except:
-                    pass
+                    break
 
     return name
 

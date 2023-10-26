@@ -50,8 +50,8 @@ def fetch_power_curve(file: str) -> list[np.ndarray]:
             if len(cpu_data) != 11:
                 raise ValueError("CPU and memory data have unexpected length, must be 11")
 
-            log.info(f"CPU energy consumption: {list(cpu_data)}")
-            log.info(f"Memory energy consumption: {list(mem_data)}")
+            log.info(f"CPU energy consumption: {[round(i, 0) for i in cpu_data]}")
+            log.info(f"Memory energy consumption: {[round(i, 0) for i in mem_data]}")
             return [cpu_data, mem_data]
     else:
         raise FileNotFoundError(f"File {file}.json not found in {spec_folder}")
